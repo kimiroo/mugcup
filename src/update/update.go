@@ -3,29 +3,20 @@ package update
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/creativeprojects/go-selfupdate"
+
+	"mugcup/applog"
 )
 
 // RepoSlug is the GitHub repository releases are checked against.
 const RepoSlug = "kimiroo/mugcup"
 
 const cliExeName = "mugcup-cli.exe"
-
-// getLogFile opens or creates a log file in the OS temp directory.
-func getLogFile() (*os.File, error) {
-	logPath := filepath.Join(os.TempDir(), "mugcup-update.log")
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open log file in tmp: %w", err)
-	}
-	return file, nil
-}
 
 // CleanOldExecutables removes the .old files go-selfupdate's Apply leaves
 // behind on Windows (see its update.OldSavePath doc: removal right after an
@@ -80,12 +71,8 @@ func newUpdater() (*selfupdate.Updater, error) {
 
 // CheckLatest checks GitHub for a newer release than current.
 func CheckLatest(ctx context.Context, current string) (rel *selfupdate.Release, found bool, err error) {
-	logFile, logErr := getLogFile()
-	if logErr == nil {
-		defer logFile.Close()
-		logger := log.New(logFile, "[CheckLatest] ", log.LstdFlags)
-		logger.Printf("Checking update for version: %s\n", current)
-	}
+	logger := applog.New("update")
+	logger.Printf("Checking update for version: %s", current)
 
 	if !ParseableVersion(current) {
 		return nil, false, fmt.Errorf("current version %q is not a valid semantic version", current)
@@ -98,9 +85,7 @@ func CheckLatest(ctx context.Context, current string) (rel *selfupdate.Release, 
 
 	latest, ok, err := updater.DetectLatest(ctx, selfupdate.ParseSlug(RepoSlug))
 	if err != nil {
-		if logFile != nil {
-			log.New(logFile, "[CheckLatest] ", log.LstdFlags).Printf("Error: %v\n", err)
-		}
+		logger.Printf("Error: %v", err)
 		return nil, false, fmt.Errorf("failed to check for updates: %w", err)
 	}
 	if !ok || !latest.GreaterThan(current) {
@@ -111,13 +96,8 @@ func CheckLatest(ctx context.Context, current string) (rel *selfupdate.Release, 
 
 // Apply updates mugcup.exe and mugcup-cli.exe to the specified release.
 func Apply(ctx context.Context, rel *selfupdate.Release) error {
-	logFile, logErr := getLogFile()
-	var logger *log.Logger
-	if logErr == nil {
-		defer logFile.Close()
-		logger = log.New(logFile, "[Apply] ", log.LstdFlags)
-		logger.Printf("Starting update to version: %s\n", rel.Version())
-	}
+	logger := applog.New("update")
+	logger.Printf("Starting update to version: %s", rel.Version())
 
 	updater, err := newUpdater()
 	if err != nil {
@@ -129,24 +109,18 @@ func Apply(ctx context.Context, rel *selfupdate.Release) error {
 		return fmt.Errorf("failed to resolve mugcup's own executable path: %w", err)
 	}
 	if err := updater.UpdateTo(ctx, rel, guiPath); err != nil {
-		if logger != nil {
-			logger.Printf("Failed to update GUI: %v\n", err)
-		}
+		logger.Printf("Failed to update GUI: %v", err)
 		return fmt.Errorf("failed to update mugcup.exe: %w", err)
 	}
 
 	cliPath := filepath.Join(filepath.Dir(guiPath), cliExeName)
 	if _, err := os.Stat(cliPath); err == nil {
 		if err := updater.UpdateTo(ctx, rel, cliPath); err != nil {
-			if logger != nil {
-				logger.Printf("Failed to update CLI: %v\n", err)
-			}
+			logger.Printf("Failed to update CLI: %v", err)
 			return fmt.Errorf("failed to update mugcup-cli.exe: %w", err)
 		}
 	}
 
-	if logger != nil {
-		logger.Println("Update completed successfully.")
-	}
+	logger.Println("Update completed successfully.")
 	return nil
 }

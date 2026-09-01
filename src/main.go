@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"runtime"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"time"
 	"unsafe"
 
+	"mugcup/applog"
 	"mugcup/autostart"
 	"mugcup/ipc"
 	"mugcup/settings"
@@ -44,6 +44,17 @@ var (
 	user32                            = syscall.NewLazyDLL("user32.dll")
 	procMessageBoxW                   = user32.NewProc("MessageBoxW")
 	procSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
+)
+
+// Subsystem loggers, all writing to the one shared rotating log file (see
+// mugcup/applog). New is safe to call before applog.Init runs — these are
+// resolved eagerly at package-init time but don't actually write anywhere
+// until something logs, which only happens after main() has called Init.
+var (
+	mainLogger     = applog.New("main")
+	settingsLogger = applog.New("settings")
+	popupLogger    = applog.New("popup")
+	updateLogger   = applog.New("update")
 )
 
 // dpiAwarenessContextPerMonitorAwareV2 is DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
@@ -85,6 +96,10 @@ func showUseCliWarning() {
 }
 
 func main() {
+	if err := applog.Init(); err != nil {
+		fmt.Fprintln(os.Stderr, "applog: failed to open log file, falling back to stderr:", err)
+	}
+
 	// mugcup.exe never parses commands itself; any CLI-style argument just
 	// shows the warning above and exits.
 	if len(os.Args[1:]) > 0 {
@@ -100,28 +115,24 @@ func main() {
 		return
 	}
 
-	cfg, err := settings.LoadConfig()
-	if err != nil {
-		log.Println("failed to load config, using defaults:", err)
-		cfg = settings.DefaultConfig()
-	}
+	// Failures are already logged inside settings.LoadConfig (settings
+	// subsystem), which also already falls back to defaults on its own.
+	cfg, _ := settings.LoadConfig()
 	ctrl := settings.NewController(cfg)
 
 	// Self-heal the auto-start registry entry on every launch (in case it
 	// was removed or edited outside mugcup), and again whenever the setting
-	// changes so toggling it takes effect immediately.
-	if err := autostart.Sync(cfg.AutoStart); err != nil {
-		log.Println("failed to sync auto-start setting:", err)
-	}
+	// changes so toggling it takes effect immediately. Failures are already
+	// logged inside autostart.Sync (registry subsystem), so they're just
+	// swallowed here — a failed self-heal isn't fatal to starting up.
+	_ = autostart.Sync(cfg.AutoStart)
 	ctrl.OnConfigChange(func(c settings.Config) {
-		if err := autostart.Sync(c.AutoStart); err != nil {
-			log.Println("failed to sync auto-start setting:", err)
-		}
+		_ = autostart.Sync(c.AutoStart)
 	})
 
 	app, err := walk.InitApp()
 	if err != nil {
-		log.Fatal("walk.InitApp failed:", err)
+		mainLogger.Fatal("walk.InitApp failed:", err)
 	}
 
 	initWails(ctrl, app)
@@ -250,6 +261,7 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 		return ipc.Response{Success: true, Message: "Opened the settings window."}
 
 	case "export":
+		settingsLogger.Println("Config exported.")
 		return ipc.Response{Success: true, Message: "Exporting the current config.", Config: configPayload(ctrl)}
 
 	case "import":
@@ -306,15 +318,19 @@ func handleStart(ctrl *settings.Controller, args []string) ipc.Response {
 
 func handleImport(ctrl *settings.Controller, raw string) ipc.Response {
 	if strings.TrimSpace(raw) == "" {
+		settingsLogger.Println("Import rejected: empty config JSON.")
 		return ipc.Response{Success: false, Message: "the config JSON to import is empty."}
 	}
 	var cfg settings.Config
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		settingsLogger.Printf("Import failed: invalid config JSON: %v", err)
 		return ipc.Response{Success: false, Message: "failed to parse config JSON: " + err.Error()}
 	}
 	if err := ctrl.UpdateConfig(cfg); err != nil {
+		// Already logged inside Controller.UpdateConfig (settings subsystem).
 		return ipc.Response{Success: false, Message: "failed to apply config: " + err.Error()}
 	}
+	settingsLogger.Println("Config imported successfully.")
 	return ipc.Response{Success: true, Message: "Imported config.", Config: configPayload(ctrl)}
 }
 

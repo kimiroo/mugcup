@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"mugcup/applog"
 )
+
+var logger = applog.New("settings")
 
 func configPath() (string, error) {
 	dir, err := os.UserConfigDir() // Windows: %APPDATA%
@@ -66,6 +70,7 @@ func SaveConfig(c Config) error {
 func LoadConfig() (Config, error) {
 	path, err := configPath()
 	if err != nil {
+		logger.Printf("failed to resolve the config path, using defaults: %v", err)
 		return DefaultConfig(), err
 	}
 	data, err := os.ReadFile(path)
@@ -73,13 +78,16 @@ func LoadConfig() (Config, error) {
 		return DefaultConfig(), nil
 	}
 	if err != nil {
+		logger.Printf("failed to read config.json, using defaults: %v", err)
 		return DefaultConfig(), err
 	}
 	var c Config
 	if err := json.Unmarshal(data, &c); err != nil {
+		logger.Printf("config.json is not valid JSON, using defaults: %v", err)
 		return DefaultConfig(), err
 	}
 	if err := ValidateConfig(c); err != nil {
+		logger.Printf("config.json failed validation, using defaults: %v", err)
 		return DefaultConfig(), err
 	}
 	return c, nil

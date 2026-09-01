@@ -1,10 +1,16 @@
 package power
 
-import "syscall"
+import (
+	"syscall"
+
+	"mugcup/applog"
+)
 
 var (
 	kernel32                    = syscall.NewLazyDLL("kernel32.dll")
 	procSetThreadExecutionState = kernel32.NewProc("SetThreadExecutionState")
+
+	logger = applog.New("power")
 )
 
 const (
@@ -25,6 +31,7 @@ func Apply(active, keepDisplayOn bool) error {
 	}
 	r, _, err := procSetThreadExecutionState.Call(flags)
 	if r == 0 {
+		logger.Printf("SetThreadExecutionState failed (active=%v, keepDisplayOn=%v): %v", active, keepDisplayOn, err)
 		return err
 	}
 	return nil

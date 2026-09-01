@@ -9,7 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"mugcup/applog"
 )
+
+var logger = applog.New("ipc")
 
 type Request struct {
 	Command string   `json:"command"`
@@ -104,17 +108,20 @@ func TrySendToExisting(req Request) (Response, bool) {
 func StartServer(handler func(Request) Response) (func(), error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
+		logger.Printf("failed to listen on a loopback port: %v", err)
 		return nil, err
 	}
 
 	tcpAddr := ln.Addr().(*net.TCPAddr)
 	pPath, err := portFilePath()
 	if err != nil {
+		logger.Printf("failed to resolve the port file path: %v", err)
 		ln.Close()
 		return nil, err
 	}
 
 	if err := os.WriteFile(pPath, []byte(strconv.Itoa(tcpAddr.Port)), 0644); err != nil {
+		logger.Printf("failed to write the port file: %v", err)
 		ln.Close()
 		return nil, err
 	}
@@ -123,6 +130,12 @@ func StartServer(handler func(Request) Response) (func(), error) {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
+				// Expected on normal shutdown (cleanup calls ln.Close(),
+				// which unblocks Accept with this same error) — only note it
+				// when it happens for any other reason.
+				if !strings.Contains(err.Error(), "use of closed network connection") {
+					logger.Printf("IPC listener stopped unexpectedly: %v", err)
+				}
 				return
 			}
 			go func(c net.Conn) {

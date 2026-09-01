@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"syscall"
@@ -29,7 +28,7 @@ func maybeAutoCheckUpdate(ctrl *settings.Controller, app *walk.Application) {
 
 	rel, found, err := update.CheckLatest(context.Background(), Version)
 	if err != nil {
-		log.Println("update check failed:", err)
+		updateLogger.Println("update check failed:", err)
 		return
 	}
 	if !found {

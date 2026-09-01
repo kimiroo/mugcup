@@ -9,6 +9,8 @@ import (
 	"os"
 
 	"golang.org/x/sys/windows/registry"
+
+	"mugcup/applog"
 )
 
 const (
@@ -16,25 +18,34 @@ const (
 	valueName  = "mugcup"
 )
 
+var logger = applog.New("registry")
+
 // Sync ensures the registry either does (enabled=true) or does not
 // (enabled=false) launch mugcup.exe at sign-in, overwriting whatever is
 // there if it doesn't already match.
 func Sync(enabled bool) error {
 	key, _, err := registry.CreateKey(registry.CURRENT_USER, runKeyPath, registry.QUERY_VALUE|registry.SET_VALUE)
 	if err != nil {
+		logger.Printf("failed to open the Run registry key: %v", err)
 		return fmt.Errorf("failed to open the Run registry key: %w", err)
 	}
 	defer key.Close()
 
 	if !enabled {
-		if err := key.DeleteValue(valueName); err != nil && err != registry.ErrNotExist {
+		if err := key.DeleteValue(valueName); err != nil {
+			if err == registry.ErrNotExist {
+				return nil
+			}
+			logger.Printf("failed to remove the auto-start registry value: %v", err)
 			return fmt.Errorf("failed to remove the auto-start registry value: %w", err)
 		}
+		logger.Println("auto-start registry value removed.")
 		return nil
 	}
 
 	exePath, err := os.Executable()
 	if err != nil {
+		logger.Printf("failed to resolve mugcup's own executable path: %v", err)
 		return fmt.Errorf("failed to resolve mugcup's own executable path: %w", err)
 	}
 	want := `"` + exePath + `"`
@@ -44,7 +55,9 @@ func Sync(enabled bool) error {
 	}
 
 	if err := key.SetStringValue(valueName, want); err != nil {
+		logger.Printf("failed to set the auto-start registry value: %v", err)
 		return fmt.Errorf("failed to set the auto-start registry value: %w", err)
 	}
+	logger.Printf("auto-start registry value set to %s", want)
 	return nil
 }

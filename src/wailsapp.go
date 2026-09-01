@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"log"
 	"runtime"
 	"sync"
 	"syscall"
@@ -153,7 +152,7 @@ func (a *App) run(view windowView) {
 	// trying to show a window that was never created.
 	defer func() {
 		if r := recover(); r != nil {
-			log.Println("settings window panic:", r)
+			popupLogger.Println("settings window panic:", r)
 		}
 		a.mu.Lock()
 		if a.ctx == nil {
@@ -164,7 +163,7 @@ func (a *App) run(view windowView) {
 
 	assets, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
-		log.Println("frontend assets:", err)
+		popupLogger.Println("frontend assets:", err)
 		return
 	}
 
@@ -193,7 +192,7 @@ func (a *App) run(view windowView) {
 		},
 	})
 	if err != nil {
-		log.Println("wails.Run failed:", err)
+		popupLogger.Println("wails.Run failed:", err)
 	}
 }
 

@@ -167,14 +167,20 @@ func (c *Controller) OnStateChange(fn func(State)) {
 	c.stListeners = append(c.stListeners, fn)
 }
 
+// UpdateConfig is the single entry point every settings change goes through
+// (tray toggles, the popup window's Save, the CLI's "set"/"import" commands),
+// so a failure here — however it was triggered — is logged right here rather
+// than duplicated at each caller.
 func (c *Controller) UpdateConfig(cfg Config) error {
 	if cfg.TrayClickAction == "" {
 		cfg.TrayClickAction = ActionCycle
 	}
 	if err := ValidateConfig(cfg); err != nil {
+		logger.Printf("rejected config update: %v", err)
 		return err
 	}
 	if err := SaveConfig(cfg); err != nil { // store.go
+		logger.Printf("failed to save config: %v", err)
 		return err
 	}
 	c.mu.Lock()

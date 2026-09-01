@@ -42,6 +42,8 @@ func extractIconFile() string {
 		path := filepath.Join(os.TempDir(), "mugcup-window-icon.ico")
 		if err := os.WriteFile(path, assets.IconICO, 0644); err == nil {
 			iconFilePath = path
+		} else {
+			popupLogger.Printf("failed to extract the window icon to %s: %v", path, err)
 		}
 	})
 	return iconFilePath
@@ -66,6 +68,7 @@ func setPopupWindowIcon() {
 	}
 	hwnd, _, _ := procFindWindowW.Call(uintptr(unsafe.Pointer(classPtr)), 0)
 	if hwnd == 0 {
+		popupLogger.Println("setPopupWindowIcon: window handle not found")
 		return
 	}
 
