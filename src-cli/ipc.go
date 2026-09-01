@@ -43,6 +43,7 @@ type ConfigPayload struct {
 	AutoUpdateApply bool   `json:"autoUpdateApply"`
 	TimerList       []int  `json:"timerList"`
 	TrayClickAction string `json:"trayClickAction"`
+	Language        string `json:"language"` // GUI-only setting; the CLI has no --language equivalent
 }
 
 type UpdatePayload struct {

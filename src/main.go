@@ -13,6 +13,7 @@ import (
 
 	"mugcup/applog"
 	"mugcup/autostart"
+	"mugcup/i18n"
 	"mugcup/ipc"
 	"mugcup/settings"
 	"mugcup/tray"
@@ -107,7 +108,7 @@ const noUpdateFlag = "--no-update"
 // initialized, for when mugcup.exe is launched with CLI-style arguments.
 func showUseCliWarning() {
 	title, _ := syscall.UTF16PtrFromString("mugcup")
-	text, _ := syscall.UTF16PtrFromString("mugcup.exe does not process command-line arguments directly.\n\nUse mugcup-cli.exe to send commands to the running mugcup.\nExample: mugcup-cli start 1h30m")
+	text, _ := syscall.UTF16PtrFromString(i18n.T("cli_warning.text"))
 	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), uintptr(mbOK|mbIconWarning|mbSetForeground))
 }
 
@@ -115,6 +116,12 @@ func main() {
 	if err := applog.Init(); err != nil {
 		fmt.Fprintln(os.Stderr, "applog: failed to open log file, falling back to stderr:", err)
 	}
+
+	// Resolves to the OS's UI language until config loads below and may
+	// override it with an explicit choice — set this early so even the
+	// showUseCliWarning path (which can exit before config ever loads)
+	// still gets a properly localized message instead of always English.
+	i18n.SetLang(string(i18n.Auto))
 
 	// mugcup.exe never parses commands itself; --no-update (passed by
 	// mugcup-cli's "launch") is the sole exception, so any other CLI-style
@@ -141,6 +148,7 @@ func main() {
 	// subsystem), which also already falls back to defaults on its own.
 	cfg, _ := settings.LoadConfig()
 	ctrl := settings.NewController(cfg)
+	i18n.SetLang(cfg.Language)
 
 	// Self-heal the auto-start registry entry on every launch (in case it
 	// was removed or edited outside mugcup), and again whenever the setting
@@ -150,6 +158,7 @@ func main() {
 	_ = autostart.Sync(cfg.AutoStart)
 	ctrl.OnConfigChange(func(c settings.Config) {
 		_ = autostart.Sync(c.AutoStart)
+		i18n.SetLang(c.Language)
 	})
 
 	app, err := walk.InitApp()
@@ -415,5 +424,6 @@ func configPayload(ctrl *settings.Controller) *ipc.ConfigPayload {
 		AutoUpdateApply: cfg.AutoUpdateApply,
 		TimerList:       cfg.TimerList,
 		TrayClickAction: string(cfg.TrayClickAction),
+		Language:        cfg.Language,
 	}
 }

@@ -48,6 +48,7 @@ type ConfigPayload struct {
 	AutoUpdateApply bool   `json:"autoUpdateApply"`
 	TimerList       []int  `json:"timerList"`
 	TrayClickAction string `json:"trayClickAction"`
+	Language        string `json:"language"` // "auto", "en", or "ko" — see mugcup/i18n
 }
 
 // UpdatePayload reports the outcome of an "update" check — Version is only

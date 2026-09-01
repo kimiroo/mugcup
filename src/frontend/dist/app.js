@@ -17,6 +17,7 @@
     chkAutoUpdateCheck: document.getElementById("chkAutoUpdateCheck"),
     chkAutoUpdateApply: document.getElementById("chkAutoUpdateApply"),
     trayClickAction: document.getElementById("trayClickAction"),
+    languageSelect: document.getElementById("languageSelect"),
     btnExportConfig: document.getElementById("btnExportConfig"),
     btnImportConfig: document.getElementById("btnImportConfig"),
 
@@ -45,6 +46,43 @@
   };
 
   let config = null; // last known ConfigPayload
+  let translations = {}; // last known Translations() map, keyed by "ui.*"
+
+  // t looks up key in the active locale, falling back to the key itself —
+  // same fallback shape as the Go side's i18n.T, so a key that somehow never
+  // got fetched (translations still {} very early) still shows something
+  // legible instead of throwing or rendering blank.
+  function t(key) {
+    return translations[key] || key;
+  }
+
+  // applyTranslations re-labels every element tagged data-i18n (textContent),
+  // data-i18n-placeholder, or data-i18n-title from map, then resizes since a
+  // language swap can change label lengths enough to reflow the window's
+  // content height. Called once at init and again on every "mugcup:config"
+  // push (setConfig) — cheap enough that re-running it for unrelated config
+  // changes isn't worth special-casing.
+  function applyTranslations(map) {
+    translations = map || {};
+    document.querySelectorAll("[data-i18n]").forEach((node) => {
+      const key = node.getAttribute("data-i18n");
+      if (translations[key] !== undefined) node.textContent = translations[key];
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+      const key = node.getAttribute("data-i18n-placeholder");
+      if (translations[key] !== undefined) node.placeholder = translations[key];
+    });
+    document.querySelectorAll("[data-i18n-title]").forEach((node) => {
+      const key = node.getAttribute("data-i18n-title");
+      if (translations[key] !== undefined) node.title = translations[key];
+    });
+    if (config) renderPresets(); // preset labels/titles are JS-generated, not data-i18n
+    scheduleResize();
+  }
+
+  function refreshTranslations() {
+    App().Translations().then(applyTranslations).catch(() => {});
+  }
 
   // The window has no fixed content height — Go clamps it between the
   // current view's min/maxHeight (see viewSpecs in wailsapp.go) but the
@@ -92,7 +130,7 @@
   }
 
   function formatPresetSec(sec) {
-    if (sec <= 0) return "Indefinite";
+    if (sec <= 0) return t("ui.common.indefinite");
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
     if (h > 0 && m > 0) return `${h}h ${m}m`;
@@ -115,7 +153,7 @@
     if (!config.timerList.length) {
       const empty = document.createElement("li");
       empty.className = "preset-empty";
-      empty.textContent = "No presets yet — add one below.";
+      empty.textContent = t("ui.preset.empty");
       el.presetList.appendChild(empty);
       scheduleResize();
       return;
@@ -129,7 +167,7 @@
       grip.className = "preset-grip";
       grip.textContent = "⠿";
       grip.setAttribute("aria-hidden", "true");
-      grip.title = "Drag to reorder";
+      grip.title = t("ui.preset.drag_title");
 
       const label = document.createElement("span");
       label.className = "preset-label";
@@ -141,7 +179,7 @@
       const remove = document.createElement("button");
       remove.className = "preset-remove";
       remove.textContent = "✕";
-      remove.title = "Remove preset";
+      remove.title = t("ui.preset.remove_title");
       remove.addEventListener("click", () => removePreset(index));
 
       actions.appendChild(remove);
@@ -191,12 +229,14 @@
     // is off is a contradiction — disable it until checking is back on.
     el.chkAutoUpdateApply.disabled = !config.autoUpdateCheck;
     el.trayClickAction.value = config.trayClickAction;
+    el.languageSelect.value = config.language;
     renderPresets();
   }
 
   function setConfig(cfg) {
     config = cfg;
     renderConfig();
+    refreshTranslations(); // language may have changed among cfg's fields
   }
 
   async function saveConfig() {
@@ -241,11 +281,11 @@
   function addPreset() {
     const sec = parsePresetDuration(el.presetMinutes.value);
     if (sec === null || sec < 0) {
-      showError("Unrecognized format. Try e.g. 1h30m, 45m, or 0 for indefinite.");
+      showError(t("ui.error.unrecognized_with_indefinite"));
       return;
     }
     if (config.timerList.includes(sec)) {
-      showError("That preset already exists.");
+      showError(t("ui.error.preset_exists"));
       return;
     }
     config.timerList.push(sec);
@@ -293,7 +333,7 @@
   function startDuration() {
     const text = el.freeText.value.trim();
     if (!text) {
-      showError("Enter a duration, e.g. 1h30m, 45m.");
+      showError(t("ui.error.enter_duration"));
       return;
     }
     const match = text.match(/(\d+h)?\s*(\d+m)?\s*(\d+s)?/i);
@@ -304,7 +344,7 @@
       if (match[3]) sec += parseInt(match[3], 10);
     }
     if (sec <= 0) {
-      showError("Unrecognized format. Try e.g. 1h30m, 45m.");
+      showError(t("ui.error.unrecognized_duration"));
       return;
     }
     startAndClose(App().StartDurationSeconds(sec));
@@ -316,13 +356,13 @@
     let target;
     if (el.chkWithDate.checked) {
       if (!el.untilDateTime.value) {
-        showError("Pick a date and time.");
+        showError(t("ui.error.pick_datetime"));
         return;
       }
       target = new Date(el.untilDateTime.value);
     } else {
       if (!el.untilTime.value) {
-        showError("Pick a time.");
+        showError(t("ui.error.pick_time"));
         return;
       }
       const [h = 0, m = 0, s = 0] = el.untilTime.value.split(":").map((p) => parseInt(p, 10) || 0);
@@ -334,8 +374,8 @@
     if (sec <= 0) {
       showError(
         el.chkWithDate.checked
-          ? "Pick a date and time in the future."
-          : 'Pick a time later today, or turn on "With date" to choose another day.'
+          ? t("ui.error.pick_future_datetime")
+          : t("ui.error.pick_future_time")
       );
       return;
     }
@@ -366,6 +406,10 @@
     });
     el.trayClickAction.addEventListener("change", () => {
       config.trayClickAction = el.trayClickAction.value;
+      saveConfig();
+    });
+    el.languageSelect.addEventListener("change", () => {
+      config.language = el.languageSelect.value;
       saveConfig();
     });
 
@@ -404,15 +448,21 @@
   async function init() {
     wireEvents();
     try {
-      const [cfg, view, ver, variant] = await Promise.all([
+      const [cfg, view, ver, variant, trans] = await Promise.all([
         App().GetConfig(),
         App().CurrentView(),
         App().Version(),
         App().BuildVariant(),
+        App().Translations(),
       ]);
+      // Apply translations before the window ever reveals itself (it stays
+      // hidden until showView's scheduleResize measures and centers it —
+      // see revealPending in wailsapp.go), so there's no flash of English
+      // before the resolved language replaces it.
+      applyTranslations(trans);
       setConfig(cfg);
       showView(view);
-      el.aboutVersion.textContent = `Version ${ver} (${variant})`;
+      el.aboutVersion.textContent = `${t("ui.about.version_prefix")} ${ver} (${variant})`;
     } catch (err) {
       showError(String(err));
     }

@@ -9,6 +9,7 @@ import (
 	"time"
 	"unsafe"
 
+	"mugcup/i18n"
 	"mugcup/ipc"
 	"mugcup/settings"
 	"mugcup/update"
@@ -75,7 +76,7 @@ func handleUpdateCheck() ipc.Response {
 // dialog rather than left for a caller that isn't necessarily listening.
 func checkForUpdatesInteractive(app *walk.Application) {
 	if !update.ParseableVersion(Version) {
-		showInfo("This is a development build, so it can't check for updates.")
+		showInfo(i18n.T("update.dev_build"))
 		return
 	}
 
@@ -85,7 +86,7 @@ func checkForUpdatesInteractive(app *walk.Application) {
 		return
 	}
 	if !found {
-		showInfo(fmt.Sprintf("mugcup %s is already up to date.", Version))
+		showInfo(fmt.Sprintf(i18n.T("update.up_to_date"), Version))
 		return
 	}
 
@@ -135,23 +136,20 @@ func applyUpdateAndRestart(app *walk.Application, rel *selfupdate.Release) error
 		}
 	}
 
-	showInfo(fmt.Sprintf("mugcup was updated to %s. Please restart it to finish.", rel.Version()))
+	showInfo(fmt.Sprintf(i18n.T("update.restart_needed"), rel.Version()))
 	return nil
 }
 
 func confirmUpdate(newVersion string) bool {
-	title, _ := syscall.UTF16PtrFromString("mugcup update available")
-	text, _ := syscall.UTF16PtrFromString(fmt.Sprintf(
-		"mugcup %s is available (you have %s).\n\nInstall it now? mugcup will restart.",
-		newVersion, Version,
-	))
+	title, _ := syscall.UTF16PtrFromString(i18n.T("update.available.title"))
+	text, _ := syscall.UTF16PtrFromString(fmt.Sprintf(i18n.T("update.available.text"), newVersion, Version))
 	ret, _, _ := procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), uintptr(mbYesNo|mbIconQuestion|mbSetForeground))
 	return ret == idYes
 }
 
 func showUpdateFailure(err error) {
-	title, _ := syscall.UTF16PtrFromString("mugcup update failed")
-	text, _ := syscall.UTF16PtrFromString("Failed to update mugcup:\n\n" + err.Error())
+	title, _ := syscall.UTF16PtrFromString(i18n.T("update.failed.title"))
+	text, _ := syscall.UTF16PtrFromString(i18n.T("update.failed.prefix") + err.Error())
 	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), uintptr(mbOK|mbIconWarning|mbSetForeground))
 }
 

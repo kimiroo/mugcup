@@ -11,6 +11,7 @@ require (
 	github.com/tailscale/walk v0.0.0-20260702185836-28b80ea70d3b
 	github.com/wailsapp/wails/v2 v2.15.0
 	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.39.0
 )
 
 require (
@@ -57,7 +58,6 @@ require (
 	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	gopkg.in/Knetic/govaluate.v3 v3.0.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect

@@ -14,6 +14,7 @@ import (
 	"time"
 	"unsafe"
 
+	"mugcup/i18n"
 	"mugcup/ipc"
 	"mugcup/settings"
 
@@ -60,17 +61,23 @@ const (
 // (.app's overflow-y: auto) past that rather than growing further; About's
 // content never changes once open, so its one measurement is final.
 type viewSpec struct {
-	title                string
+	titleKey             string // i18n key, resolved via i18n.T at the point of use — see title()
 	width, height        int
 	minHeight, maxHeight int
 }
 
+// title resolves a viewSpec's window title in the currently active locale.
+// Never cached: applyView/run call this fresh on every open/switch, and
+// startup's config-change listener calls it again if the language changes
+// while the window is already showing, so it's always current.
+func (s viewSpec) title() string { return i18n.T(s.titleKey) }
+
 var viewSpecs = map[windowView]viewSpec{
-	viewSettings: {title: "Settings", width: 440, height: 620, minHeight: 360, maxHeight: 620},
-	viewCustom:   {title: "Custom", width: 400, height: 340, minHeight: 300, maxHeight: 460},
+	viewSettings: {titleKey: "window.title.settings", width: 440, height: 620, minHeight: 360, maxHeight: 620},
+	viewCustom:   {titleKey: "window.title.custom", width: 400, height: 340, minHeight: 300, maxHeight: 460},
 	// About's shared header is hidden for this view (app.js's showView), so
 	// its content is shorter than the other views' by roughly that much.
-	viewAbout: {title: "About", width: 360, height: 310, minHeight: 280, maxHeight: 340},
+	viewAbout: {titleKey: "window.title.about", width: 360, height: 310, minHeight: 280, maxHeight: 340},
 }
 
 // App is the Wails-bound backend for the popup window. Every method here is
@@ -162,7 +169,7 @@ func (a *App) open(view windowView) {
 // is measured — so there's nothing to visibly grow or jump into.
 func (a *App) applyView(ctx context.Context, view windowView) {
 	spec := viewSpecs[view]
-	wailsruntime.WindowSetTitle(ctx, spec.title)
+	wailsruntime.WindowSetTitle(ctx, spec.title())
 	wailsruntime.WindowSetMinSize(ctx, spec.width, spec.minHeight)
 	wailsruntime.WindowSetMaxSize(ctx, spec.width, spec.maxHeight)
 	wailsruntime.WindowSetSize(ctx, spec.width, spec.height)
@@ -213,7 +220,7 @@ func (a *App) run(view windowView) {
 
 	spec := viewSpecs[view]
 	err = wails.Run(&options.App{
-		Title:     spec.title,
+		Title:     spec.title(),
 		Width:     spec.width,
 		Height:    spec.height,
 		MinWidth:  spec.width,
@@ -255,8 +262,19 @@ func (a *App) startup(ctx context.Context) {
 	// Push live config updates so the window reflects changes made elsewhere
 	// (CLI, tray) while it's open, not just what was true when it was opened.
 	// Timer state isn't shown in this window (that's the tray's job), so
-	// there's no equivalent state subscription.
+	// there's no equivalent state subscription. Also re-applies the window's
+	// own title: main.go's own OnConfigChange listener (i18n.SetLang) is
+	// registered well before this one ever can be (it fires at process
+	// startup; this only exists once a popup has been opened at least once),
+	// so the language is already current by the time title() resolves it —
+	// the only piece a locale change doesn't otherwise reach live is the
+	// native window chrome, since the frontend gets its own re-translation
+	// via the emitted config event below (see setConfig in app.js).
 	a.ctrl.OnConfigChange(func(settings.Config) {
+		a.mu.Lock()
+		view := a.view
+		a.mu.Unlock()
+		wailsruntime.WindowSetTitle(ctx, viewSpecs[view].title())
 		wailsruntime.EventsEmit(ctx, "mugcup:config", configPayload(a.ctrl))
 	})
 
@@ -307,6 +325,13 @@ func (a *App) CurrentView() string {
 	defer a.mu.Unlock()
 	return string(a.view)
 }
+
+// Translations returns the active locale's full UI catalog (see mugcup/i18n
+// and its "ui.*" keys), for app.js's applyTranslations to apply by key. The
+// frontend fetches it once at init and again on every "mugcup:config" event
+// (setConfig), so a language change made in Settings re-translates the
+// window immediately without a restart.
+func (a *App) Translations() map[string]string { return i18n.Map() }
 
 // windowChromeHeight is this window style's native title bar + bottom
 // border thickness, measured empirically (GetWindowRect vs GetClientRect)
@@ -404,6 +429,7 @@ func (a *App) SaveConfig(cfg ipc.ConfigPayload) error {
 			AutoUpdateApply: cfg.AutoUpdateApply,
 			TimerList:       cfg.TimerList,
 			TrayClickAction: settings.TrayClickAction(cfg.TrayClickAction),
+			Language:        cfg.Language,
 		})
 	})
 	return saveErr
@@ -425,7 +451,7 @@ func (a *App) ExportConfig() error {
 	}
 
 	path, err := wailsruntime.SaveFileDialog(ctx, wailsruntime.SaveDialogOptions{
-		Title:           "Export mugcup config",
+		Title:           i18n.T("dialog.export_config.title"),
 		DefaultFilename: "mugcup-config.json",
 		Filters:         []wailsruntime.FileFilter{{DisplayName: "Config Files (*.json)", Pattern: "*.json"}},
 	})
@@ -441,7 +467,7 @@ func (a *App) ExportConfig() error {
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", path, err)
 	}
-	showInfo("Config exported to:\n" + path)
+	showInfo(fmt.Sprintf(i18n.T("config.export.success"), path))
 	return nil
 }
 
@@ -459,7 +485,7 @@ func (a *App) ImportConfig() error {
 	}
 
 	path, err := wailsruntime.OpenFileDialog(ctx, wailsruntime.OpenDialogOptions{
-		Title:   "Import mugcup config",
+		Title:   i18n.T("dialog.import_config.title"),
 		Filters: []wailsruntime.FileFilter{{DisplayName: "Config Files (*.json)", Pattern: "*.json"}},
 	})
 	if err != nil || path == "" {
@@ -478,7 +504,7 @@ func (a *App) ImportConfig() error {
 	if !resp.Success {
 		return errors.New(resp.Message)
 	}
-	showInfo("Config imported successfully.")
+	showInfo(i18n.T("config.import.success"))
 	return nil
 }
 

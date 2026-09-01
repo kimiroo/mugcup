@@ -13,97 +13,105 @@
 
     <section class="view" id="view-settings" hidden>
       <section class="card">
-        <h2>Presets</h2>
+        <h2 data-i18n="ui.settings.presets_heading">Presets</h2>
         <ul class="preset-list" id="presetList"></ul>
         <div class="preset-add">
-          <input type="text" id="presetMinutes" placeholder="e.g. 1h30m, 45m, or 0 for indefinite">
-          <button class="btn" id="btnAddPreset">+ Add</button>
+          <input type="text" id="presetMinutes" data-i18n-placeholder="ui.settings.preset_placeholder" placeholder="e.g. 1h30m, 45m, or 0 for indefinite">
+          <button class="btn" id="btnAddPreset" data-i18n="ui.settings.add_button">+ Add</button>
         </div>
       </section>
 
       <section class="card">
-        <h2>General</h2>
+        <h2 data-i18n="ui.settings.general_heading">General</h2>
         <label class="switch-row">
-          <span>Keep display on</span>
+          <span data-i18n="ui.settings.keep_display_on">Keep display on</span>
           <span class="switch"><input type="checkbox" id="chkDisplayOn"><span class="track"><span class="thumb"></span></span></span>
         </label>
         <label class="switch-row">
-          <span>Start automatically with Windows</span>
+          <span data-i18n="ui.settings.start_with_windows">Start automatically with Windows</span>
           <span class="switch"><input type="checkbox" id="chkAutoStart"><span class="track"><span class="thumb"></span></span></span>
         </label>
         <label class="switch-row">
-          <span>Automatically check for updates</span>
+          <span data-i18n="ui.settings.auto_check_updates">Automatically check for updates</span>
           <span class="switch"><input type="checkbox" id="chkAutoUpdateCheck"><span class="track"><span class="thumb"></span></span></span>
         </label>
         <label class="switch-row switch-row--nested">
-          <span>Automatically install updates</span>
+          <span data-i18n="ui.settings.auto_install_updates">Automatically install updates</span>
           <span class="switch"><input type="checkbox" id="chkAutoUpdateApply"><span class="track"><span class="thumb"></span></span></span>
         </label>
         <label class="select-row">
-          <span>Tray click action</span>
+          <span data-i18n="ui.settings.tray_click_action">Tray click action</span>
           <select id="trayClickAction">
-            <option value="cycle">Cycle through presets</option>
-            <option value="indefinite">Indefinite</option>
-            <option value="menu">Open tray menu</option>
+            <option value="cycle" data-i18n="ui.settings.tray_click_cycle">Cycle through presets</option>
+            <option value="indefinite" data-i18n="ui.settings.tray_click_indefinite">Toggle indefinite mode</option>
+            <option value="menu" data-i18n="ui.settings.tray_click_menu">Open tray menu</option>
+          </select>
+        </label>
+        <label class="select-row">
+          <span data-i18n="ui.settings.language">Language</span>
+          <select id="languageSelect">
+            <option value="auto">Auto</option>
+            <option value="en">English</option>
+            <option value="ko">한국어</option>
           </select>
         </label>
       </section>
 
       <section class="card">
-        <h2>Config</h2>
+        <h2 data-i18n="ui.settings.config_heading">Config</h2>
         <div class="quick-row">
-          <button class="btn" id="btnExportConfig">Export...</button>
-          <button class="btn" id="btnImportConfig">Import...</button>
+          <button class="btn" id="btnExportConfig" data-i18n="ui.settings.export_button">Export...</button>
+          <button class="btn" id="btnImportConfig" data-i18n="ui.settings.import_button">Import...</button>
         </div>
       </section>
     </section>
 
     <section class="view" id="view-custom" hidden>
       <section class="card">
-        <h2>Custom</h2>
+        <h2 data-i18n="ui.custom.heading">Custom</h2>
         <div class="tabs">
-          <button class="tab active" id="tabDuration" data-mode="duration" type="button">For a duration</button>
-          <button class="tab" id="tabUntil" data-mode="until" type="button">Until a date &amp; time</button>
+          <button class="tab active" id="tabDuration" data-mode="duration" type="button" data-i18n="ui.custom.tab_duration">For a duration</button>
+          <button class="tab" id="tabUntil" data-mode="until" type="button" data-i18n="ui.custom.tab_until">Until a date &amp; time</button>
         </div>
 
         <div class="mode-pane" id="paneDuration">
           <div class="duration-row">
-            <input type="text" id="freeText" placeholder="e.g. 1h30m, 45m">
-            <button class="btn btn-accent" id="btnStartDuration">Start</button>
+            <input type="text" id="freeText" data-i18n-placeholder="ui.custom.duration_placeholder" placeholder="e.g. 1h30m, 45m">
+            <button class="btn btn-accent" id="btnStartDuration" data-i18n="ui.custom.start_button">Start</button>
           </div>
         </div>
 
         <div class="mode-pane" id="paneUntil" hidden>
           <label class="date-toggle">
             <span class="switch"><input type="checkbox" id="chkWithDate"><span class="track"><span class="thumb"></span></span></span>
-            <span>Choose a specific date</span>
+            <span data-i18n="ui.custom.choose_date">Choose a specific date</span>
           </label>
           <div class="duration-row">
             <input type="time" id="untilTime" step="1">
             <input type="datetime-local" id="untilDateTime" hidden>
-            <button class="btn btn-accent" id="btnStartUntil">Start</button>
+            <button class="btn btn-accent" id="btnStartUntil" data-i18n="ui.custom.start_button">Start</button>
           </div>
         </div>
       </section>
 
       <div class="quick-row">
-        <button class="btn" id="btnCancelCustom">Cancel</button>
+        <button class="btn" id="btnCancelCustom" data-i18n="ui.custom.cancel_button">Cancel</button>
       </div>
     </section>
 
     <section class="view" id="view-about" hidden>
       <section class="card about-card">
         <div class="about-title">mugcup ☕️</div>
-        <p class="about-tagline">Keep your PC awake, on your terms.</p>
+        <p class="about-tagline" data-i18n="ui.about.tagline">Keep your PC awake, on your terms.</p>
         <div class="about-version" id="aboutVersion">Version —</div>
         <div class="quick-row">
-          <button class="btn" id="btnRepo">View on GitHub</button>
-          <button class="btn" id="btnCheckUpdate">Check for Updates</button>
+          <button class="btn" id="btnRepo" data-i18n="ui.about.view_github">View on GitHub</button>
+          <button class="btn" id="btnCheckUpdate" data-i18n="ui.about.check_updates">Check for Updates</button>
         </div>
       </section>
 
       <div class="quick-row">
-        <button class="btn btn-accent" id="btnCloseAbout">Close</button>
+        <button class="btn btn-accent" id="btnCloseAbout" data-i18n="ui.about.close">Close</button>
       </div>
     </section>
   </div>

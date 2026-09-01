@@ -31,6 +31,10 @@ type Config struct {
 	AutoUpdateApply bool            `json:"autoUpdateApply"`
 	TimerList       []int           `json:"timerList"` // seconds, 0 = indefinite
 	TrayClickAction TrayClickAction `json:"trayClickAction"`
+	// Language is "auto" (follow the OS's UI language), "en", or "ko" — see
+	// mugcup/i18n.Lang, which this deliberately doesn't import (settings
+	// stays independent of presentation; main.go wires the two together).
+	Language string `json:"language"`
 }
 
 func DefaultConfig() Config {
@@ -41,6 +45,7 @@ func DefaultConfig() Config {
 		AutoUpdateApply: false,
 		TimerList:       []int{15 * 60, 30 * 60, 60 * 60, 2 * 60 * 60, 0},
 		TrayClickAction: ActionCycle,
+		Language:        "auto",
 	}
 }
 
@@ -55,10 +60,15 @@ func ValidateConfig(cfg Config) error {
 	}
 	switch cfg.TrayClickAction {
 	case "", ActionCycle, ActionIndefinite, ActionOpenMenu:
-		return nil
 	default:
 		return fmt.Errorf("unknown tray click action: %q", cfg.TrayClickAction)
 	}
+	switch cfg.Language {
+	case "", "auto", "en", "ko":
+	default:
+		return fmt.Errorf("unknown language: %q", cfg.Language)
+	}
+	return nil
 }
 
 // Mode is how the current state was started, for callers that display it
@@ -140,6 +150,9 @@ func NewController(cfg Config) *Controller {
 	if cfg.TrayClickAction == "" {
 		cfg.TrayClickAction = ActionCycle
 	}
+	if cfg.Language == "" {
+		cfg.Language = "auto"
+	}
 	return &Controller{cfg: cfg, timerIndex: -1, state: State{Mode: ModeOff}}
 }
 
@@ -174,6 +187,9 @@ func (c *Controller) OnStateChange(fn func(State)) {
 func (c *Controller) UpdateConfig(cfg Config) error {
 	if cfg.TrayClickAction == "" {
 		cfg.TrayClickAction = ActionCycle
+	}
+	if cfg.Language == "" {
+		cfg.Language = "auto"
 	}
 	if err := ValidateConfig(cfg); err != nil {
 		logger.Printf("rejected config update: %v", err)

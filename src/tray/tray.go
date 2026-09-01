@@ -1,10 +1,12 @@
 package tray
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"mugcup/assets"
+	"mugcup/i18n"
 	"mugcup/settings"
 
 	"fyne.io/systray"
@@ -38,8 +40,8 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 	updateTrayIcon(state)
 	updateTooltip(state)
 
-	mIndefinite := systray.AddMenuItemCheckbox("Indefinite", "Keep the system awake indefinitely", state.Active && state.Indefinite)
-	mPresets := systray.AddMenuItemCheckbox("Preset", "Choose a preset duration", state.PresetActive)
+	mIndefinite := systray.AddMenuItemCheckbox(i18n.T("tray.indefinite.label"), i18n.T("tray.indefinite.tooltip"), state.Active && state.Indefinite)
+	mPresets := systray.AddMenuItemCheckbox(i18n.T("tray.preset.label"), i18n.T("tray.preset.tooltip"), state.PresetActive)
 
 	type presetItem struct {
 		item    *systray.MenuItem
@@ -60,7 +62,7 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 				anyChecked = true
 			} else {
 				p.item.Uncheck()
-				p.item.SetTooltip("Start " + p.label)
+				p.item.SetTooltip(fmt.Sprintf(i18n.T("tray.preset.start_tooltip"), p.label))
 			}
 		}
 		if anyChecked {
@@ -78,7 +80,7 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 		subItems = nil
 		for _, sec := range timerList {
 			label := settings.FormatDurationSec(sec)
-			sub := mPresets.AddSubMenuItemCheckbox(label, "Start "+label, false)
+			sub := mPresets.AddSubMenuItemCheckbox(label, fmt.Sprintf(i18n.T("tray.preset.start_tooltip"), label), false)
 			subItems = append(subItems, presetItem{item: sub, seconds: sec, label: label})
 			go func(s *systray.MenuItem, durationSec int) {
 				for range s.ClickedCh {
@@ -92,16 +94,16 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 
 	rebuildPresets(cfg.TimerList)
 
-	mCustom := systray.AddMenuItem("Custom...", "Start for a custom duration or until a specific time")
-	mOff := systray.AddMenuItemCheckbox("Turn off", "Turn off the timer", !state.Active)
+	mCustom := systray.AddMenuItem(i18n.T("tray.custom.label"), i18n.T("tray.custom.tooltip"))
+	mOff := systray.AddMenuItemCheckbox(i18n.T("tray.turnoff.label"), i18n.T("tray.turnoff.tooltip"), !state.Active)
 
 	systray.AddSeparator()
-	mKeepDisplay := systray.AddMenuItemCheckbox("Keep display on", "Also keep the display from turning off", cfg.KeepDisplayOn)
-	mSettings := systray.AddMenuItem("Settings", "Open settings window")
+	mKeepDisplay := systray.AddMenuItemCheckbox(i18n.T("tray.keepdisplay.label"), i18n.T("tray.keepdisplay.tooltip"), cfg.KeepDisplayOn)
+	mSettings := systray.AddMenuItem(i18n.T("tray.settings.label"), i18n.T("tray.settings.tooltip"))
 
 	systray.AddSeparator()
-	mAbout := systray.AddMenuItem("About", "About mugcup")
-	mQuit := systray.AddMenuItem("Quit", "Quit mugcup")
+	mAbout := systray.AddMenuItem(i18n.T("tray.about.label"), i18n.T("tray.about.tooltip"))
+	mQuit := systray.AddMenuItem(i18n.T("tray.quit.label"), i18n.T("tray.quit.tooltip"))
 
 	updateTapHandler := func(action settings.TrayClickAction) {
 		if action == settings.ActionOpenMenu {
@@ -119,6 +121,31 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 	}
 	updateTapHandler(cfg.TrayClickAction)
 
+	// relabel refreshes every static item's title/tooltip from the active
+	// locale — a no-op string swap most of the time, but the only way the
+	// tray menu picks up a live language change (i18n.SetLang has already
+	// run by the time this listener fires; main.go's own OnConfigChange
+	// listener for that is registered first). rebuildPresets below handles
+	// the dynamic preset submenu the same way, just via full recreation.
+	relabel := func() {
+		mIndefinite.SetTitle(i18n.T("tray.indefinite.label"))
+		mIndefinite.SetTooltip(i18n.T("tray.indefinite.tooltip"))
+		mPresets.SetTitle(i18n.T("tray.preset.label"))
+		mPresets.SetTooltip(i18n.T("tray.preset.tooltip"))
+		mCustom.SetTitle(i18n.T("tray.custom.label"))
+		mCustom.SetTooltip(i18n.T("tray.custom.tooltip"))
+		mOff.SetTitle(i18n.T("tray.turnoff.label"))
+		mOff.SetTooltip(i18n.T("tray.turnoff.tooltip"))
+		mKeepDisplay.SetTitle(i18n.T("tray.keepdisplay.label"))
+		mKeepDisplay.SetTooltip(i18n.T("tray.keepdisplay.tooltip"))
+		mSettings.SetTitle(i18n.T("tray.settings.label"))
+		mSettings.SetTooltip(i18n.T("tray.settings.tooltip"))
+		mAbout.SetTitle(i18n.T("tray.about.label"))
+		mAbout.SetTooltip(i18n.T("tray.about.tooltip"))
+		mQuit.SetTitle(i18n.T("tray.quit.label"))
+		mQuit.SetTooltip(i18n.T("tray.quit.tooltip"))
+	}
+
 	ctrl.OnConfigChange(func(c settings.Config) {
 		if c.KeepDisplayOn {
 			mKeepDisplay.Check()
@@ -126,6 +153,7 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 			mKeepDisplay.Uncheck()
 		}
 		updateTapHandler(c.TrayClickAction)
+		relabel()
 		rebuildPresets(c.TimerList)
 	})
 

@@ -129,7 +129,8 @@ func TestParseConfigJSON(t *testing.T) {
 		"autoUpdateCheck": true,
 		"autoUpdateApply": false,
 		"timerList": [900, 1800, 0],
-		"trayClickAction": "cycle"
+		"trayClickAction": "cycle",
+		"language": "auto"
 	}`
 	cfg, err := ParseConfigJSON([]byte(valid))
 	if err != nil {
