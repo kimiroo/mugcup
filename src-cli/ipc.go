@@ -18,12 +18,13 @@ import (
 // repos later), so the types are duplicated here rather than shared —
 // only the JSON tags need to match.
 type Request struct {
-	Command    string   `json:"command"`
-	Args       []string `json:"args"`
-	DisplayOn  *bool    `json:"displayOn,omitempty"`
-	AutoStart  *bool    `json:"autoStart,omitempty"`
-	AutoUpdate *bool    `json:"autoUpdate,omitempty"`
-	ConfigJSON string   `json:"configJson,omitempty"`
+	Command         string   `json:"command"`
+	Args            []string `json:"args"`
+	DisplayOn       *bool    `json:"displayOn,omitempty"`
+	AutoStart       *bool    `json:"autoStart,omitempty"`
+	AutoUpdateCheck *bool    `json:"autoUpdateCheck,omitempty"`
+	AutoUpdateApply *bool    `json:"autoUpdateApply,omitempty"`
+	ConfigJSON      string   `json:"configJson,omitempty"`
 }
 
 type StatusPayload struct {
@@ -38,7 +39,8 @@ type StatusPayload struct {
 type ConfigPayload struct {
 	AutoStart       bool   `json:"autoStart"`
 	KeepDisplayOn   bool   `json:"keepDisplayOn"`
-	AutoUpdate      bool   `json:"autoUpdate"`
+	AutoUpdateCheck bool   `json:"autoUpdateCheck"`
+	AutoUpdateApply bool   `json:"autoUpdateApply"`
 	TimerList       []int  `json:"timerList"`
 	TrayClickAction string `json:"trayClickAction"`
 }

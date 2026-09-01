@@ -14,14 +14,16 @@ import (
 type Request struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
-	// DisplayOn, AutoStart, and AutoUpdate are tri-state: nil=unset (keep
-	// config), non-nil=apply and persist immediately. They're accepted
-	// alongside any command (so e.g. "start 30m -d true" both starts a timer
-	// and updates the display setting), and are also what the standalone
-	// "set" command uses to change settings that no other command touches.
-	DisplayOn  *bool `json:"displayOn,omitempty"`
-	AutoStart  *bool `json:"autoStart,omitempty"`
-	AutoUpdate *bool `json:"autoUpdate,omitempty"`
+	// DisplayOn, AutoStart, AutoUpdateCheck, and AutoUpdateApply are
+	// tri-state: nil=unset (keep config), non-nil=apply and persist
+	// immediately. They're accepted alongside any command (so e.g.
+	// "start 30m -d true" both starts a timer and updates the display
+	// setting), and are also what the standalone "set" command uses to
+	// change settings that no other command touches.
+	DisplayOn       *bool `json:"displayOn,omitempty"`
+	AutoStart       *bool `json:"autoStart,omitempty"`
+	AutoUpdateCheck *bool `json:"autoUpdateCheck,omitempty"`
+	AutoUpdateApply *bool `json:"autoUpdateApply,omitempty"`
 	// ConfigJSON carries the full config to apply for the "import" command.
 	ConfigJSON string `json:"configJson,omitempty"`
 }
@@ -38,7 +40,8 @@ type StatusPayload struct {
 type ConfigPayload struct {
 	AutoStart       bool   `json:"autoStart"`
 	KeepDisplayOn   bool   `json:"keepDisplayOn"`
-	AutoUpdate      bool   `json:"autoUpdate"`
+	AutoUpdateCheck bool   `json:"autoUpdateCheck"`
+	AutoUpdateApply bool   `json:"autoUpdateApply"`
 	TimerList       []int  `json:"timerList"`
 	TrayClickAction string `json:"trayClickAction"`
 }

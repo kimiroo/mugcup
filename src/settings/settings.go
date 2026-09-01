@@ -21,9 +21,14 @@ const (
 )
 
 type Config struct {
-	AutoStart       bool            `json:"autoStart"`
-	KeepDisplayOn   bool            `json:"keepDisplayOn"`
-	AutoUpdate      bool            `json:"autoUpdate"`
+	AutoStart     bool `json:"autoStart"`
+	KeepDisplayOn bool `json:"keepDisplayOn"`
+	// AutoUpdateCheck periodically checks GitHub for a newer release.
+	// AutoUpdateApply, only meaningful when AutoUpdateCheck is also on,
+	// installs it without asking; otherwise a found update just prompts for
+	// confirmation before installing.
+	AutoUpdateCheck bool            `json:"autoUpdateCheck"`
+	AutoUpdateApply bool            `json:"autoUpdateApply"`
 	TimerList       []int           `json:"timerList"` // seconds, 0 = unlimited
 	TrayClickAction TrayClickAction `json:"trayClickAction"`
 }
@@ -32,7 +37,8 @@ func DefaultConfig() Config {
 	return Config{
 		AutoStart:       false,
 		KeepDisplayOn:   false,
-		AutoUpdate:      true,
+		AutoUpdateCheck: true,
+		AutoUpdateApply: false,
 		TimerList:       []int{15 * 60, 30 * 60, 60 * 60, 2 * 60 * 60, 0},
 		TrayClickAction: ActionCycle,
 	}

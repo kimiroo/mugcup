@@ -56,12 +56,15 @@ func runLaunch(opts options) Response {
 }
 
 // applySettingsOnly makes one more IPC call after launch when -d, --auto-start,
-// or --auto-update was given, so "launch with these settings" works in one command.
+// --auto-update-check, or --auto-update-apply was given, so "launch with
+// these settings" works in one command.
 func applySettingsOnly(opts options, fallback Response) Response {
 	if !opts.hasSetting() {
 		return fallback
 	}
-	resp, ok := sendToRunningInstance(Request{Command: "set", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
+	req := opts.asRequest()
+	req.Command = "set"
+	resp, ok := sendToRunningInstance(req)
 	if !ok {
 		return fallback
 	}
@@ -71,7 +74,9 @@ func applySettingsOnly(opts options, fallback Response) Response {
 // runExit asks the running mugcup.exe to quit and waits until the process is
 // actually gone.
 func runExit(opts options) Response {
-	resp, ok := sendToRunningInstance(Request{Command: "exit", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
+	req := opts.asRequest()
+	req.Command = "exit"
+	resp, ok := sendToRunningInstance(req)
 	if !ok {
 		return Response{Success: false, Message: "mugcup is not currently running."}
 	}

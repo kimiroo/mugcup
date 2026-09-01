@@ -141,9 +141,19 @@ html, body {
 }
 
 .about-tagline {
-  margin: 6px 0 18px;
+  margin: 6px 0 12px;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+.about-version {
+  margin: 0 0 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.about-card .quick-row {
+  justify-content: center;
 }
 
 .quick-row,

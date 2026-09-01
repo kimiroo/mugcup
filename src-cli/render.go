@@ -94,7 +94,8 @@ func renderConfigText(c *ConfigPayload) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Auto start: %s\n", formatYesNo(c.AutoStart))
 	fmt.Fprintf(&b, "Keep display on: %s\n", formatYesNo(c.KeepDisplayOn))
-	fmt.Fprintf(&b, "Auto update: %s\n", formatYesNo(c.AutoUpdate))
+	fmt.Fprintf(&b, "Auto update check: %s\n", formatYesNo(c.AutoUpdateCheck))
+	fmt.Fprintf(&b, "Auto update apply: %s\n", formatYesNo(c.AutoUpdateApply))
 	fmt.Fprintf(&b, "Presets: %s\n", strings.Join(presets, ", "))
 	fmt.Fprintf(&b, "Tray click action: %s", formatTrayClickAction(c.TrayClickAction))
 	return b.String()

@@ -33,8 +33,12 @@
           <span class="switch"><input type="checkbox" id="chkAutoStart"><span class="track"><span class="thumb"></span></span></span>
         </label>
         <label class="switch-row">
-          <span>Auto update</span>
-          <span class="switch"><input type="checkbox" id="chkAutoUpdate"><span class="track"><span class="thumb"></span></span></span>
+          <span>Automatically check for updates</span>
+          <span class="switch"><input type="checkbox" id="chkAutoUpdateCheck"><span class="track"><span class="thumb"></span></span></span>
+        </label>
+        <label class="switch-row">
+          <span>Automatically install updates</span>
+          <span class="switch"><input type="checkbox" id="chkAutoUpdateApply"><span class="track"><span class="thumb"></span></span></span>
         </label>
         <label class="select-row">
           <span>Tray click action</span>
@@ -84,7 +88,11 @@
       <section class="card about-card">
         <div class="about-title">mugcup</div>
         <p class="about-tagline">Keep your PC awake, on your terms.</p>
-        <button class="btn" id="btnRepo">View on GitHub</button>
+        <div class="about-version" id="aboutVersion">Version —</div>
+        <div class="quick-row">
+          <button class="btn" id="btnRepo">View on GitHub</button>
+          <button class="btn" id="btnCheckUpdate">Check for Updates</button>
+        </div>
       </section>
 
       <div class="quick-row">

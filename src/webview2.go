@@ -32,5 +32,5 @@ func isWebView2Installed() bool {
 func showWebView2MissingWarning() {
 	title, _ := syscall.UTF16PtrFromString("mugcup")
 	text, _ := syscall.UTF16PtrFromString("This window needs the Microsoft Edge WebView2 Runtime, which isn't installed on this PC.\n\nInstall it from https://developer.microsoft.com/microsoft-edge/webview2/ and try again. The keep-awake tray feature works fine without it.")
-	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), uintptr(mbOK|mbIconWarning))
+	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), uintptr(mbOK|mbIconWarning|mbSetForeground))
 }

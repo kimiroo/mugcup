@@ -12,9 +12,11 @@ import (
 	"time"
 	"unsafe"
 
+	"mugcup/autostart"
 	"mugcup/ipc"
 	"mugcup/settings"
 	"mugcup/tray"
+	"mugcup/update"
 
 	"github.com/tailscale/walk"
 )
@@ -30,17 +32,37 @@ var (
 	procMessageBoxW = user32.NewProc("MessageBoxW")
 )
 
+// stopIPCServer shuts down the single-instance IPC listener. It's set once
+// StartServer succeeds and called early by applyUpdateAndRestart (before
+// spawning the replacement process), so the new instance's own
+// TrySendToExisting check doesn't see this still-exiting one and mistake it
+// for "already running".
+var stopIPCServer func()
+
 const (
-	mbOK          = 0x00000000
-	mbIconWarning = 0x00000030
+	mbOK              = 0x00000000
+	mbYesNo           = 0x00000004
+	mbIconInformation = 0x00000040
+	mbIconWarning     = 0x00000030
+	mbIconQuestion    = 0x00000020
+
+	mbSetForeground = 0x00010000
+
+	idYes = 6
 )
+
+// Version is set at build time via -ldflags "-X main.Version=1.2.3"
+// (build.ps1 does this automatically from the nearest git tag). The default,
+// "dev", marks a local/unreleased build; self-update is disabled for those,
+// since there's no meaningful version to compare against a release.
+var Version = "dev"
 
 // showUseCliWarning shows a native message box without needing walk
 // initialized, for when mugcup.exe is launched with CLI-style arguments.
 func showUseCliWarning() {
 	title, _ := syscall.UTF16PtrFromString("mugcup")
 	text, _ := syscall.UTF16PtrFromString("mugcup.exe does not process command-line arguments directly.\n\nUse mugcup-cli.exe to send commands to the running mugcup.\nExample: mugcup-cli start 1h30m")
-	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), uintptr(mbOK|mbIconWarning))
+	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), uintptr(mbOK|mbIconWarning|mbSetForeground))
 }
 
 func main() {
@@ -50,6 +72,9 @@ func main() {
 		showUseCliWarning()
 		os.Exit(0)
 	}
+
+	// Clean up leftover .old executable files from previous updates
+	update.CleanOldExecutables()
 
 	// Don't start a second instance if one is already running.
 	if _, ok := ipc.TrySendToExisting(ipc.Request{}); ok {
@@ -62,6 +87,18 @@ func main() {
 		cfg = settings.DefaultConfig()
 	}
 	ctrl := settings.NewController(cfg)
+
+	// Self-heal the auto-start registry entry on every launch (in case it
+	// was removed or edited outside mugcup), and again whenever the setting
+	// changes so toggling it takes effect immediately.
+	if err := autostart.Sync(cfg.AutoStart); err != nil {
+		log.Println("failed to sync auto-start setting:", err)
+	}
+	ctrl.OnConfigChange(func(c settings.Config) {
+		if err := autostart.Sync(c.AutoStart); err != nil {
+			log.Println("failed to sync auto-start setting:", err)
+		}
+	})
 
 	app, err := walk.InitApp()
 	if err != nil {
@@ -79,6 +116,7 @@ func main() {
 		})
 	})
 	if err == nil {
+		stopIPCServer = cleanupIPC
 		defer cleanupIPC()
 	}
 
@@ -94,6 +132,8 @@ func main() {
 	})
 	start()
 	defer end()
+
+	go maybeAutoCheckUpdate(ctrl, app)
 
 	app.Run() // handles both tray and settings-window messages
 	os.Exit(0)
@@ -132,12 +172,13 @@ func runOnMainThreadVoid(app *walk.Application, fn func()) {
 }
 
 func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.Request) ipc.Response {
-	// -d/--display-on, --auto-start, and --auto-update are global options
-	// applied before dispatching to the actual command, regardless of which
-	// command it is (and are the only thing the standalone "set" command
-	// does). They persist independently of an active timer, unlike -d's
-	// on-screen effect which only actually applies while a timer is running.
-	if req.DisplayOn != nil || req.AutoStart != nil || req.AutoUpdate != nil {
+	// -d/--display-on, --auto-start, --auto-update-check, and
+	// --auto-update-apply are global options applied before dispatching to
+	// the actual command, regardless of which command it is (and are the
+	// only thing the standalone "set" command does). They persist
+	// independently of an active timer, unlike -d's on-screen effect which
+	// only actually applies while a timer is running.
+	if req.DisplayOn != nil || req.AutoStart != nil || req.AutoUpdateCheck != nil || req.AutoUpdateApply != nil {
 		cfg := ctrl.Config()
 		changed := false
 		if req.DisplayOn != nil && cfg.KeepDisplayOn != *req.DisplayOn {
@@ -148,8 +189,12 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 			cfg.AutoStart = *req.AutoStart
 			changed = true
 		}
-		if req.AutoUpdate != nil && cfg.AutoUpdate != *req.AutoUpdate {
-			cfg.AutoUpdate = *req.AutoUpdate
+		if req.AutoUpdateCheck != nil && cfg.AutoUpdateCheck != *req.AutoUpdateCheck {
+			cfg.AutoUpdateCheck = *req.AutoUpdateCheck
+			changed = true
+		}
+		if req.AutoUpdateApply != nil && cfg.AutoUpdateApply != *req.AutoUpdateApply {
+			cfg.AutoUpdateApply = *req.AutoUpdateApply
 			changed = true
 		}
 		if changed {
@@ -277,7 +322,8 @@ func configPayload(ctrl *settings.Controller) *ipc.ConfigPayload {
 	return &ipc.ConfigPayload{
 		AutoStart:       cfg.AutoStart,
 		KeepDisplayOn:   cfg.KeepDisplayOn,
-		AutoUpdate:      cfg.AutoUpdate,
+		AutoUpdateCheck: cfg.AutoUpdateCheck,
+		AutoUpdateApply: cfg.AutoUpdateApply,
 		TimerList:       cfg.TimerList,
 		TrayClickAction: string(cfg.TrayClickAction),
 	}

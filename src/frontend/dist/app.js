@@ -13,7 +13,8 @@
     btnAddPreset: document.getElementById("btnAddPreset"),
     chkDisplayOn: document.getElementById("chkDisplayOn"),
     chkAutoStart: document.getElementById("chkAutoStart"),
-    chkAutoUpdate: document.getElementById("chkAutoUpdate"),
+    chkAutoUpdateCheck: document.getElementById("chkAutoUpdateCheck"),
+    chkAutoUpdateApply: document.getElementById("chkAutoUpdateApply"),
     trayClickAction: document.getElementById("trayClickAction"),
 
     tabDuration: document.getElementById("tabDuration"),
@@ -28,7 +29,9 @@
     btnStartUntil: document.getElementById("btnStartUntil"),
     btnCancelCustom: document.getElementById("btnCancelCustom"),
 
+    aboutVersion: document.getElementById("aboutVersion"),
     btnRepo: document.getElementById("btnRepo"),
+    btnCheckUpdate: document.getElementById("btnCheckUpdate"),
     btnCloseAbout: document.getElementById("btnCloseAbout"),
 
     errorLabel: document.getElementById("errorLabel"),
@@ -119,7 +122,8 @@
   function renderConfig() {
     el.chkDisplayOn.checked = config.keepDisplayOn;
     el.chkAutoStart.checked = config.autoStart;
-    el.chkAutoUpdate.checked = config.autoUpdate;
+    el.chkAutoUpdateCheck.checked = config.autoUpdateCheck;
+    el.chkAutoUpdateApply.checked = config.autoUpdateApply;
     el.trayClickAction.value = config.trayClickAction;
     renderPresets();
   }
@@ -268,11 +272,12 @@
       if (e.key === "Enter") addPreset();
     });
 
-    [el.chkDisplayOn, el.chkAutoStart, el.chkAutoUpdate].forEach((chk) => {
+    [el.chkDisplayOn, el.chkAutoStart, el.chkAutoUpdateCheck, el.chkAutoUpdateApply].forEach((chk) => {
       chk.addEventListener("change", () => {
         config.keepDisplayOn = el.chkDisplayOn.checked;
         config.autoStart = el.chkAutoStart.checked;
-        config.autoUpdate = el.chkAutoUpdate.checked;
+        config.autoUpdateCheck = el.chkAutoUpdateCheck.checked;
+        config.autoUpdateApply = el.chkAutoUpdateApply.checked;
         saveConfig();
       });
     });
@@ -297,6 +302,9 @@
     el.btnCancelCustom.addEventListener("click", () => App().Hide());
 
     el.btnRepo.addEventListener("click", openRepo);
+    el.btnCheckUpdate.addEventListener("click", () => {
+      App().CheckForUpdates().catch((err) => showError(String(err)));
+    });
     el.btnCloseAbout.addEventListener("click", () => App().Hide());
 
     window.runtime.EventsOn("mugcup:config", setConfig);
@@ -306,9 +314,14 @@
   async function init() {
     wireEvents();
     try {
-      const [cfg, view] = await Promise.all([App().GetConfig(), App().CurrentView()]);
+      const [cfg, view, ver] = await Promise.all([
+        App().GetConfig(),
+        App().CurrentView(),
+        App().Version(),
+      ]);
       setConfig(cfg);
       showView(view);
+      el.aboutVersion.textContent = "Version " + ver;
     } catch (err) {
       showError(String(err));
     }

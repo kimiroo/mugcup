@@ -216,6 +216,11 @@ func (a *App) beforeClose(ctx context.Context) bool {
 
 func (a *App) GetConfig() *ipc.ConfigPayload { return configPayload(a.ctrl) }
 
+// Version returns the build-time version string (e.g. "1.2.3" or "dev").
+// Exposed as a bound method so the About view can display it without an
+// additional IPC round-trip.
+func (a *App) Version() string { return Version }
+
 // CurrentView reports which view the window should render. The frontend
 // calls this once on load, since it can't rely on catching the startup
 // "mugcup:view" event if its listener attaches after that event fired.
@@ -276,7 +281,8 @@ func (a *App) SaveConfig(cfg ipc.ConfigPayload) error {
 		saveErr = a.ctrl.UpdateConfig(settings.Config{
 			AutoStart:       cfg.AutoStart,
 			KeepDisplayOn:   cfg.KeepDisplayOn,
-			AutoUpdate:      cfg.AutoUpdate,
+			AutoUpdateCheck: cfg.AutoUpdateCheck,
+			AutoUpdateApply: cfg.AutoUpdateApply,
 			TimerList:       cfg.TimerList,
 			TrayClickAction: settings.TrayClickAction(cfg.TrayClickAction),
 		})

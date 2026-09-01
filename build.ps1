@@ -1,5 +1,9 @@
 param(
-    [string[]]$Architectures = @("amd64", "x86", "arm64")
+    [string[]]$Architectures = @("amd64", "x86", "arm64"),
+    # Version baked into both binaries (self-update compares against this).
+    # Defaults to the nearest git tag (without a leading "v"); falls back to
+    # "dev" if there's no tag, which disables self-update in the built app.
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,6 +13,20 @@ $ErrorActionPreference = "Stop"
 $projectRoot = $PSScriptRoot
 $guiSourceRoot = Join-Path $projectRoot "src"
 $cliSourceRoot = Join-Path $projectRoot "src-cli"
+
+if (-not $Version) {
+    $Version = "dev"
+    try {
+        $tag = git -C $projectRoot describe --tags --abbrev=0 2>$null
+        if ($LASTEXITCODE -eq 0 -and $tag) {
+            $Version = $tag.Trim().TrimStart("v")
+        }
+    } catch {
+        # git not available or no tags yet; keep "dev".
+    }
+}
+Write-Host "Building version: $Version"
+$versionLdflags = "-X main.Version=$Version"
 
 if (-not (Test-Path -LiteralPath $guiSourceRoot -PathType Container)) {
     throw "GUI source directory not found: $guiSourceRoot"
@@ -61,7 +79,7 @@ try {
                 # "desktop,production" are required by Wails v2 to select the
                 # real desktop frontend and disable the dev inspector/console.
                 $guiOutputPath = Join-Path $outputDir "mugcup.exe"
-                go build -tags "desktop,production" -ldflags "-H=windowsgui -s -w" -o $guiOutputPath .
+                go build -tags "desktop,production" -ldflags "-H=windowsgui -s -w $versionLdflags" -o $guiOutputPath .
                 if ($LASTEXITCODE -ne 0) {
                     throw "$architecture GUI build failed."
                 }
@@ -92,7 +110,7 @@ try {
             try {
                 # Go's default subsystem on Windows is console.
                 $cliOutputPath = Join-Path $outputDir "mugcup-cli.exe"
-                go build -o $cliOutputPath .
+                go build -ldflags $versionLdflags -o $cliOutputPath .
                 if ($LASTEXITCODE -ne 0) {
                     throw "$architecture CLI build failed."
                 }
@@ -103,6 +121,20 @@ try {
             }
         } finally {
             Pop-Location
+        }
+
+        # ---- Release archive (for self-update) ----
+        # go-selfupdate matches release assets by a "_<os>_<arch>" suffix
+        # using Go's own arch names (386, not "x86"), and looks inside the
+        # zip by filename for each exe it wants to extract — so one zip per
+        # architecture, containing both exes, covers self-updating either.
+        if ($Version -ne "dev") {
+            $goArch = $goArchitectures[$architecture]
+            $zipPath = Join-Path $buildRoot "mugcup_windows_$goArch.zip"
+            if (Test-Path -LiteralPath $zipPath) {
+                Remove-Item -LiteralPath $zipPath -Force
+            }
+            Compress-Archive -Path (Join-Path $outputDir "mugcup.exe"), (Join-Path $outputDir "mugcup-cli.exe") -DestinationPath $zipPath
         }
     }
 } finally {
