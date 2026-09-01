@@ -23,6 +23,7 @@ type options struct {
 	autoUpdateCheck *bool
 	autoUpdateApply *bool
 	yes             bool   // -y/--yes: skip the "update" command's [y/N] confirmation
+	noUpdate        bool   // --no-update: only consumed by "launch" (see runLaunch)
 	output          string // "text" (default) or "json"
 }
 
@@ -50,7 +51,8 @@ Usage:
   mugcup-cli <command> [args] [options]
 
 Commands:
-  launch                  Start mugcup (no-op success if already running)
+  launch                  Start mugcup (no-op success if already running).
+                            --no-update skips its startup auto-update check
   start <time>             Keep on for the given duration (e.g. 30m, 1h, 2h15m). Required — no default
   start indefinite         Keep on indefinitely
   start preset <n>         Start the n-th preset from the configured list (0-based)
@@ -76,11 +78,13 @@ Options:
   --auto-update-apply <true|false>   Install a found update without asking (only takes effect if
                                       auto-update-check is also on)
   -y, --yes                       Skip the "update" command's [y/N] confirmation
+  --no-update                     With "launch": start mugcup without its startup auto-update check
   -o, --output <text|json>        Output format. start/stop/set/status/config/export/import
                                    print the result as multiple lines (text) or just that value (json)
 
 Examples:
   mugcup-cli launch
+  mugcup-cli launch --no-update
   mugcup-cli start 1h30m
   mugcup-cli start preset 0
   mugcup-cli start indefinite -d true
@@ -151,6 +155,8 @@ func parseOptions(args []string) (options, []string, error) {
 			opts.output = v
 		case "-y", "--yes":
 			opts.yes = true
+		case "--no-update":
+			opts.noUpdate = true
 		default:
 			positional = append(positional, a)
 		}

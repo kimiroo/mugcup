@@ -30,7 +30,11 @@ func guiExecutablePath() (string, error) {
 }
 
 // runLaunch starts mugcup.exe if it isn't already running and waits until its
-// IPC server actually responds before returning.
+// IPC server actually responds before returning. opts.noUpdate, if set, is
+// passed through as mugcup.exe's own --no-update argument (the only one it
+// recognizes — see main.go there) rather than applied as a setting; it's a
+// no-op when mugcup was already running, same as any -d/--auto-start/etc.
+// given alongside it (applySettingsOnly below).
 func runLaunch(opts options) Response {
 	if isRunning() {
 		return applySettingsOnly(opts, Response{Success: true, Message: "mugcup is already running."})
@@ -41,7 +45,11 @@ func runLaunch(opts options) Response {
 		return Response{Success: false, Message: err.Error()}
 	}
 
-	cmd := exec.Command(guiPath)
+	var guiArgs []string
+	if opts.noUpdate {
+		guiArgs = append(guiArgs, "--no-update")
+	}
+	cmd := exec.Command(guiPath, guiArgs...)
 	if err := cmd.Start(); err != nil {
 		return Response{Success: false, Message: "failed to start mugcup: " + err.Error()}
 	}

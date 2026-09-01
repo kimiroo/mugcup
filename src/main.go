@@ -94,6 +94,15 @@ var (
 	BuildVariant = "dev"
 )
 
+// noUpdateFlag is mugcup.exe's one recognized CLI argument — passed by
+// mugcup-cli's "launch --no-update" — which skips the startup auto-update
+// check (maybeAutoCheckUpdate). It exists so a caller provisioning mugcup
+// right after launch (e.g. "launch --no-update" followed by "set
+// --auto-update-check false") can't lose a race against the GUI's own
+// check-and-maybe-restart, which otherwise starts as soon as the tray does,
+// before that provisioning ever reaches it.
+const noUpdateFlag = "--no-update"
+
 // showUseCliWarning shows a native message box without needing walk
 // initialized, for when mugcup.exe is launched with CLI-style arguments.
 func showUseCliWarning() {
@@ -107,11 +116,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, "applog: failed to open log file, falling back to stderr:", err)
 	}
 
-	// mugcup.exe never parses commands itself; any CLI-style argument just
-	// shows the warning above and exits.
-	if len(os.Args[1:]) > 0 {
-		showUseCliWarning()
-		os.Exit(0)
+	// mugcup.exe never parses commands itself; --no-update (passed by
+	// mugcup-cli's "launch") is the sole exception, so any other CLI-style
+	// argument still just shows the warning below and exits.
+	noUpdate := false
+	if args := os.Args[1:]; len(args) > 0 {
+		if len(args) == 1 && args[0] == noUpdateFlag {
+			noUpdate = true
+		} else {
+			showUseCliWarning()
+			os.Exit(0)
+		}
 	}
 
 	// Clean up leftover .old executable files from previous updates
@@ -170,7 +185,9 @@ func main() {
 	start()
 	defer end()
 
-	go maybeAutoCheckUpdate(ctrl, app)
+	if !noUpdate {
+		go maybeAutoCheckUpdate(ctrl, app)
+	}
 
 	app.Run() // handles both tray and settings-window messages
 	os.Exit(0)
