@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ type options struct {
 	autoStart       *bool
 	autoUpdateCheck *bool
 	autoUpdateApply *bool
+	yes             bool   // -y/--yes: skip the "update" command's [y/N] confirmation
 	output          string // "text" (default) or "json"
 }
 
@@ -50,6 +52,8 @@ Commands:
   config                   Show the current config
   settings                 Open the settings window
   status                   Show the current status
+  update                   Check for updates, and if one is found, ask [y/N] before installing
+                            (-y/--yes skips the prompt and installs immediately)
   exit                     Exit the running mugcup
   import <path.json>       Read a config file and apply it (stdin if omitted)
   export <path.json>       Save the current config to a file (stdout if omitted)
@@ -62,6 +66,7 @@ Options:
   --auto-update-check <true|false>   Automatically check for updates
   --auto-update-apply <true|false>   Install a found update without asking (only takes effect if
                                       auto-update-check is also on)
+  -y, --yes                       Skip the "update" command's [y/N] confirmation
   -o, --output <text|json>        Output format. start/stop/set/status/config/export/import
                                    print the result as multiple lines (text) or just that value (json)
 
@@ -73,6 +78,8 @@ Examples:
   mugcup-cli set --auto-start true --auto-update-apply false
   mugcup-cli status -o json
   mugcup-cli export config.json
+  mugcup-cli update
+  mugcup-cli update -y
   mugcup-cli exit
 `)
 }
@@ -133,6 +140,8 @@ func parseOptions(args []string) (options, []string, error) {
 				return opts, nil, fmt.Errorf("invalid value for %s (must be text or json): %s", a, args[i])
 			}
 			opts.output = v
+		case "-y", "--yes":
+			opts.yes = true
 		default:
 			positional = append(positional, a)
 		}
@@ -282,6 +291,15 @@ func main() {
 		}
 		printResult(opts, resp)
 
+	case "export":
+		runExport(opts, positional)
+
+	case "import":
+		runImport(opts, positional)
+
+	case "update":
+		runUpdate(opts)
+
 	case "settings":
 		req := opts.asRequest()
 		req.Command = "settings"
@@ -290,12 +308,6 @@ func main() {
 			fail(notRunningMsg)
 		}
 		printResult(opts, resp)
-
-	case "export":
-		runExport(opts, positional)
-
-	case "import":
-		runImport(opts, positional)
 
 	default:
 		fail("unknown command: %s\nRun 'mugcup-cli help' for usage.", args[0])
@@ -347,4 +359,40 @@ func runImport(opts options, positional []string) {
 		fail(notRunningMsg)
 	}
 	printResult(opts, resp)
+}
+
+// runUpdate checks for an update and, if one is found, confirms before
+// installing it — a [y/N] prompt on stdin, or immediately with -y/--yes.
+// This is the CLI's own confirmation, separate from (and never triggering)
+// the native dialog the GUI's About view shows for the same check.
+func runUpdate(opts options) {
+	req := opts.asRequest()
+	req.Command = "update"
+	resp, ok := sendToRunningInstance(req)
+	if !ok {
+		fail(notRunningMsg)
+	}
+	if !resp.Success || resp.Update == nil || !resp.Update.Available {
+		printResult(opts, resp)
+		return
+	}
+
+	if !opts.yes {
+		fmt.Println(resp.Message)
+		fmt.Print("Install it now? [y/N] ")
+		answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		answer = strings.ToLower(strings.TrimSpace(answer))
+		if answer != "y" && answer != "yes" {
+			fmt.Println("Update cancelled.")
+			return
+		}
+	}
+
+	applyReq := opts.asRequest()
+	applyReq.Command = "update-apply"
+	applyResp, ok := sendToRunningInstance(applyReq)
+	if !ok {
+		fail(notRunningMsg)
+	}
+	printResult(opts, applyResp)
 }

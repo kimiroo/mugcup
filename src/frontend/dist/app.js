@@ -16,6 +16,8 @@
     chkAutoUpdateCheck: document.getElementById("chkAutoUpdateCheck"),
     chkAutoUpdateApply: document.getElementById("chkAutoUpdateApply"),
     trayClickAction: document.getElementById("trayClickAction"),
+    btnExportConfig: document.getElementById("btnExportConfig"),
+    btnImportConfig: document.getElementById("btnImportConfig"),
 
     tabDuration: document.getElementById("tabDuration"),
     tabUntil: document.getElementById("tabUntil"),
@@ -356,6 +358,13 @@
     el.trayClickAction.addEventListener("change", () => {
       config.trayClickAction = el.trayClickAction.value;
       saveConfig();
+    });
+
+    el.btnExportConfig.addEventListener("click", () => {
+      App().ExportConfig().catch((err) => showError(String(err)));
+    });
+    el.btnImportConfig.addEventListener("click", () => {
+      App().ImportConfig().catch((err) => showError(String(err)));
     });
 
     el.tabDuration.addEventListener("click", () => setCustomMode("duration"));

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -255,6 +256,36 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 
 	case "config":
 		return ipc.Response{Success: true, Message: "Retrieved the current config.", Config: configPayload(ctrl)}
+
+	case "update":
+		// The CLI does its own [y/N] confirmation (or skips it with -y), so
+		// this just reports what's available and lets "update-apply" (below)
+		// do the actual install — unlike checkForUpdatesInteractive (the
+		// About button's flow), this never shows a GUI confirm dialog.
+		return handleUpdateCheck()
+
+	case "update-apply":
+		// Re-checking rather than reusing the "update" case's result avoids
+		// having to keep a *selfupdate.Release alive across two stateless IPC
+		// calls, at the cost of one extra GitHub API round-trip. Applying and
+		// restarting take a moment, and a failure needs to be shown somewhere
+		// once the CLI has already moved on — hence the goroutine + native
+		// dialog on failure, same as checkForUpdatesInteractive.
+		go func() {
+			rel, found, err := update.CheckLatest(context.Background(), Version)
+			if err != nil {
+				showUpdateFailure(err)
+				return
+			}
+			if !found {
+				showInfo(fmt.Sprintf("mugcup %s is already up to date.", Version))
+				return
+			}
+			if err := applyUpdateAndRestart(app, rel); err != nil {
+				showUpdateFailure(err)
+			}
+		}()
+		return ipc.Response{Success: true, Message: "Applying the update. mugcup will restart shortly."}
 
 	case "settings", "show":
 		openSettingsWindow()

@@ -45,11 +45,17 @@ type ConfigPayload struct {
 	TrayClickAction string `json:"trayClickAction"`
 }
 
+type UpdatePayload struct {
+	Available bool   `json:"available"`
+	Version   string `json:"version,omitempty"`
+}
+
 type Response struct {
 	Success bool           `json:"success"`
 	Message string         `json:"message"`
 	Status  *StatusPayload `json:"status,omitempty"`
 	Config  *ConfigPayload `json:"config,omitempty"`
+	Update  *UpdatePayload `json:"update,omitempty"`
 }
 
 func portFilePath() (string, error) {

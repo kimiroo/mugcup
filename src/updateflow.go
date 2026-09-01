@@ -9,6 +9,7 @@ import (
 	"time"
 	"unsafe"
 
+	"mugcup/ipc"
 	"mugcup/settings"
 	"mugcup/update"
 
@@ -43,30 +44,63 @@ func maybeAutoCheckUpdate(ctrl *settings.Controller, app *walk.Application) {
 	}
 }
 
-// CheckForUpdates is bound to the frontend as the About view's "Check for
-// Updates" button. Unlike the automatic check, it always asks for
-// confirmation before installing — it's an explicit, interactive action.
-func (a *App) CheckForUpdates() error {
+// handleUpdateCheck answers main.go's "update" IPC case. The CLI does its
+// own [y/N] confirmation (or skips it with -y/--yes) rather than the native
+// dialog checkForUpdatesInteractive shows, so this only reports what's
+// available; "update-apply" (main.go) does the actual install once the CLI
+// has confirmed.
+func handleUpdateCheck() ipc.Response {
 	if !update.ParseableVersion(Version) {
-		showInfo("This is a development build, so it can't check for updates.")
-		return nil
+		return ipc.Response{Success: true, Message: "This is a development build, so it can't check for updates.", Update: &ipc.UpdatePayload{Available: false}}
 	}
 
 	rel, found, err := update.CheckLatest(context.Background(), Version)
 	if err != nil {
-		return err
+		return ipc.Response{Success: false, Message: "failed to check for updates: " + err.Error()}
+	}
+	if !found {
+		return ipc.Response{Success: true, Message: fmt.Sprintf("mugcup %s is already up to date.", Version), Update: &ipc.UpdatePayload{Available: false}}
+	}
+	return ipc.Response{
+		Success: true,
+		Message: fmt.Sprintf("mugcup %s is available (you have %s).", rel.Version(), Version),
+		Update:  &ipc.UpdatePayload{Available: true, Version: rel.Version()},
+	}
+}
+
+// checkForUpdatesInteractive runs a manual, always-confirmed update check
+// for the About view's "Check for Updates" button — an explicit, one-off
+// request, so (unlike the silent startup auto-check in maybeAutoCheckUpdate)
+// every outcome, including a failed check itself, is shown via a native
+// dialog rather than left for a caller that isn't necessarily listening.
+func checkForUpdatesInteractive(app *walk.Application) {
+	if !update.ParseableVersion(Version) {
+		showInfo("This is a development build, so it can't check for updates.")
+		return
+	}
+
+	rel, found, err := update.CheckLatest(context.Background(), Version)
+	if err != nil {
+		showUpdateFailure(err)
+		return
 	}
 	if !found {
 		showInfo(fmt.Sprintf("mugcup %s is already up to date.", Version))
-		return nil
+		return
 	}
 
 	if !confirmUpdate(rel.Version()) {
-		return nil
+		return
 	}
-	if err := applyUpdateAndRestart(a.walkApp, rel); err != nil {
+	if err := applyUpdateAndRestart(app, rel); err != nil {
 		showUpdateFailure(err)
 	}
+}
+
+// CheckForUpdates is bound to the frontend as the About view's "Check for
+// Updates" button.
+func (a *App) CheckForUpdates() error {
+	checkForUpdatesInteractive(a.walkApp)
 	return nil
 }
 

@@ -168,9 +168,9 @@ func (c *Controller) OnStateChange(fn func(State)) {
 }
 
 // UpdateConfig is the single entry point every settings change goes through
-// (tray toggles, the popup window's Save, the CLI's "set"/"import" commands),
-// so a failure here — however it was triggered — is logged right here rather
-// than duplicated at each caller.
+// (tray toggles, the popup window's Save/Import, the CLI's "set"/"import"
+// commands), so a failure here — however it was triggered — is logged right
+// here rather than duplicated at each caller.
 func (c *Controller) UpdateConfig(cfg Config) error {
 	if cfg.TrayClickAction == "" {
 		cfg.TrayClickAction = ActionCycle

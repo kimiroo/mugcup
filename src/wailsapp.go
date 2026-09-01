@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"runtime"
 	"sync"
 	"syscall"
@@ -336,6 +339,79 @@ func (a *App) SaveConfig(cfg ipc.ConfigPayload) error {
 		})
 	})
 	return saveErr
+}
+
+// ExportConfig lets the user save the current config to a JSON file of their
+// choosing via a native Save dialog — this wrapper owns the dialog and the
+// file write; the actual serialization is the same configPayload the CLI's
+// "export" IPC case (main.go) already uses. On success it confirms via a
+// native dialog itself, since nothing else is watching this bound method's
+// return value for good news (errors still surface through the frontend's
+// existing App().ExportConfig().catch(...) -> ShowError).
+func (a *App) ExportConfig() error {
+	a.mu.Lock()
+	ctx := a.ctx
+	a.mu.Unlock()
+	if ctx == nil {
+		return errors.New("window not ready")
+	}
+
+	path, err := wailsruntime.SaveFileDialog(ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Export mugcup config",
+		DefaultFilename: "mugcup-config.json",
+		Filters:         []wailsruntime.FileFilter{{DisplayName: "Config Files (*.json)", Pattern: "*.json"}},
+	})
+	if err != nil || path == "" {
+		return err // err is nil when the user just cancelled
+	}
+
+	settingsLogger.Println("Config exported.")
+	data, err := json.MarshalIndent(configPayload(a.ctrl), "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", path, err)
+	}
+	showInfo("Config exported to:\n" + path)
+	return nil
+}
+
+// ImportConfig lets the user pick a JSON config file via a native Open
+// dialog and applies it — this wrapper owns the dialog and the file read;
+// parsing and applying is handleImport (main.go), the same function the
+// CLI's "import" IPC case already calls with CLI-supplied JSON instead of a
+// dialog-picked file. See ExportConfig above for the success-dialog note.
+func (a *App) ImportConfig() error {
+	a.mu.Lock()
+	ctx := a.ctx
+	a.mu.Unlock()
+	if ctx == nil {
+		return errors.New("window not ready")
+	}
+
+	path, err := wailsruntime.OpenFileDialog(ctx, wailsruntime.OpenDialogOptions{
+		Title:   "Import mugcup config",
+		Filters: []wailsruntime.FileFilter{{DisplayName: "Config Files (*.json)", Pattern: "*.json"}},
+	})
+	if err != nil || path == "" {
+		return err // err is nil when the user just cancelled
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %w", path, err)
+	}
+
+	var resp ipc.Response
+	runOnMainThreadVoid(a.walkApp, func() {
+		resp = handleImport(a.ctrl, string(data))
+	})
+	if !resp.Success {
+		return errors.New(resp.Message)
+	}
+	showInfo("Config imported successfully.")
+	return nil
 }
 
 func (a *App) Hide() {

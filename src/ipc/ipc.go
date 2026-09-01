@@ -50,11 +50,19 @@ type ConfigPayload struct {
 	TrayClickAction string `json:"trayClickAction"`
 }
 
+// UpdatePayload reports the outcome of an "update" check — Version is only
+// set when Available is true.
+type UpdatePayload struct {
+	Available bool   `json:"available"`
+	Version   string `json:"version,omitempty"`
+}
+
 type Response struct {
 	Success bool           `json:"success"`
 	Message string         `json:"message"`
 	Status  *StatusPayload `json:"status,omitempty"`
 	Config  *ConfigPayload `json:"config,omitempty"`
+	Update  *UpdatePayload `json:"update,omitempty"`
 }
 
 func portFilePath() (string, error) {
