@@ -10,19 +10,29 @@ import (
 	"fyne.io/systray"
 )
 
+// Callbacks are the tray menu's entry points into the rest of the app: the
+// three popup views (all timer control lives in the tray itself; the popups
+// are config/one-off-start/info only) and quitting.
+type Callbacks struct {
+	OnSettings func()
+	OnCustom   func()
+	OnAbout    func()
+	OnQuit     func()
+}
+
 // Start registers the tray icon in external-loop mode.
-func Start(ctrl *settings.Controller, onSettings func(), onQuit func()) (start, end func()) {
+func Start(ctrl *settings.Controller, cb Callbacks) (start, end func()) {
 	return systray.RunWithExternalLoop(
-		func() { onReady(ctrl, onSettings, onQuit) },
+		func() { onReady(ctrl, cb) },
 		func() {
-			if onQuit != nil {
-				onQuit()
+			if cb.OnQuit != nil {
+				cb.OnQuit()
 			}
 		},
 	)
 }
 
-func onReady(ctrl *settings.Controller, onSettings func(), onQuit func()) {
+func onReady(ctrl *settings.Controller, cb Callbacks) {
 	systray.SetIcon(assets.IconICO)
 	cfg := ctrl.Config()
 	state := ctrl.State()
@@ -85,9 +95,11 @@ func onReady(ctrl *settings.Controller, onSettings func(), onQuit func()) {
 	rebuildPresets(cfg.TimerList)
 
 	mOff := systray.AddMenuItemCheckbox("Off", "Turn off the timer", !state.Active)
+	mCustom := systray.AddMenuItem("Custom...", "Start for a custom duration or until a specific time")
 
 	systray.AddSeparator()
 	mSettings := systray.AddMenuItem("Settings...", "Open settings window")
+	mAbout := systray.AddMenuItem("About", "About mugcup")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Exit", "Exit mugcup")
 
@@ -151,12 +163,22 @@ func onReady(ctrl *settings.Controller, onSettings func(), onQuit func()) {
 				ctrl.ToggleInfinite()
 			case <-mOff.ClickedCh:
 				ctrl.TurnOff()
+			case <-mCustom.ClickedCh:
+				if cb.OnCustom != nil {
+					cb.OnCustom()
+				}
 			case <-mSettings.ClickedCh:
-				onSettings()
+				if cb.OnSettings != nil {
+					cb.OnSettings()
+				}
+			case <-mAbout.ClickedCh:
+				if cb.OnAbout != nil {
+					cb.OnAbout()
+				}
 			case <-mQuit.ClickedCh:
 				systray.Quit()
-				if onQuit != nil {
-					onQuit()
+				if cb.OnQuit != nil {
+					cb.OnQuit()
 				}
 				return
 			}

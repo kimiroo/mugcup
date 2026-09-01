@@ -86,9 +86,12 @@ func main() {
 		app.Exit(0)
 	}
 
-	start, end := tray.Start(ctrl, func() {
-		openSettingsWindow()
-	}, quitHandler)
+	start, end := tray.Start(ctrl, tray.Callbacks{
+		OnSettings: openSettingsWindow,
+		OnCustom:   openCustomWindow,
+		OnAbout:    openAboutWindow,
+		OnQuit:     quitHandler,
+	})
 	start()
 	defer end()
 

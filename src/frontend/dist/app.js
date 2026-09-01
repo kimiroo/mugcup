@@ -5,20 +5,41 @@
 
   const el = {
     statusPill: document.getElementById("statusPill"),
+
+    viewSettings: document.getElementById("view-settings"),
+    viewCustom: document.getElementById("view-custom"),
+    viewAbout: document.getElementById("view-about"),
+
     presetList: document.getElementById("presetList"),
     presetMinutes: document.getElementById("presetMinutes"),
     btnAddPreset: document.getElementById("btnAddPreset"),
-    durationTime: document.getElementById("durationTime"),
-    btnStartDuration: document.getElementById("btnStartDuration"),
-    freeText: document.getElementById("freeText"),
-    btnStartFreeText: document.getElementById("btnStartFreeText"),
-    btnInfinite: document.getElementById("btnInfinite"),
-    btnStop: document.getElementById("btnStop"),
     chkDisplayOn: document.getElementById("chkDisplayOn"),
     chkAutoStart: document.getElementById("chkAutoStart"),
     chkAutoUpdate: document.getElementById("chkAutoUpdate"),
     trayClickAction: document.getElementById("trayClickAction"),
+
+    tabDuration: document.getElementById("tabDuration"),
+    tabUntil: document.getElementById("tabUntil"),
+    paneDuration: document.getElementById("paneDuration"),
+    paneUntil: document.getElementById("paneUntil"),
+    durationTime: document.getElementById("durationTime"),
+    btnStartDuration: document.getElementById("btnStartDuration"),
+    freeText: document.getElementById("freeText"),
+    btnStartFreeText: document.getElementById("btnStartFreeText"),
+    untilInput: document.getElementById("untilInput"),
+    btnStartUntil: document.getElementById("btnStartUntil"),
+    btnCancelCustom: document.getElementById("btnCancelCustom"),
+
+    btnRepo: document.getElementById("btnRepo"),
+    btnCloseAbout: document.getElementById("btnCloseAbout"),
+
     errorLabel: document.getElementById("errorLabel"),
+  };
+
+  const views = {
+    settings: el.viewSettings,
+    custom: el.viewCustom,
+    about: el.viewAbout,
   };
 
   let config = null; // last known ConfigPayload
@@ -29,6 +50,15 @@
   function showError(message) {
     el.errorLabel.textContent = message;
     el.errorLabel.hidden = !message;
+  }
+
+  function showView(name) {
+    if (!views[name]) return;
+    Object.entries(views).forEach(([key, node]) => {
+      node.hidden = key !== name;
+    });
+    showError("");
+    if (name === "custom") resetCustomForm();
   }
 
   function formatPresetSec(sec) {
@@ -61,9 +91,6 @@
     if (!status) return;
     el.statusPill.textContent = formatRemaining(status.active, status.infinite, currentRemainingSec());
     el.statusPill.classList.toggle("active", status.active);
-    if (el.chkDisplayOn && document.activeElement !== el.chkDisplayOn) {
-      el.chkDisplayOn.checked = status.keepDisplayOn;
-    }
   }
 
   function setStatus(s) {
@@ -88,17 +115,12 @@
       const label = document.createElement("span");
       label.className = "preset-label";
       label.textContent = formatPresetSec(sec);
-      label.title = "Click to start this preset";
-      label.addEventListener("click", () => startPreset(index));
 
       const remove = document.createElement("button");
       remove.className = "preset-remove";
       remove.textContent = "✕";
       remove.title = "Remove preset";
-      remove.addEventListener("click", (e) => {
-        e.stopPropagation();
-        removePreset(index);
-      });
+      remove.addEventListener("click", () => removePreset(index));
 
       li.appendChild(label);
       li.appendChild(remove);
@@ -146,11 +168,22 @@
     saveConfig();
   }
 
-  function startPreset(index) {
-    App()
-      .StartPreset(index)
-      .then(setStatus)
-      .catch((err) => showError(String(err)));
+  // ---- Custom view ----
+
+  function resetCustomForm() {
+    setCustomMode("duration");
+    el.durationTime.value = "00:30:00";
+    el.freeText.value = "";
+    const local = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+    local.setSeconds(0, 0);
+    el.untilInput.value = local.toISOString().slice(0, 16);
+  }
+
+  function setCustomMode(mode) {
+    el.tabDuration.classList.toggle("active", mode === "duration");
+    el.tabUntil.classList.toggle("active", mode === "until");
+    el.paneDuration.hidden = mode !== "duration";
+    el.paneUntil.hidden = mode !== "until";
   }
 
   function parseTimeInputToSeconds(value) {
@@ -160,19 +193,20 @@
     return h * 3600 + m * 60 + s;
   }
 
+  function startAndClose(sec) {
+    App()
+      .StartDurationSeconds(sec)
+      .then(() => App().Hide())
+      .catch((err) => showError(String(err)));
+  }
+
   function startDuration() {
     const sec = parseTimeInputToSeconds(el.durationTime.value);
     if (sec <= 0) {
       showError("Enter a duration greater than 0.");
       return;
     }
-    App()
-      .StartDurationSeconds(sec)
-      .then((s) => {
-        showError("");
-        setStatus(s);
-      })
-      .catch((err) => showError(String(err)));
+    startAndClose(sec);
   }
 
   function startFreeText() {
@@ -189,29 +223,31 @@
       showError("Unrecognized format. Try e.g. 1h30m, 45m.");
       return;
     }
-    App()
-      .StartDurationSeconds(sec)
-      .then((s) => {
-        showError("");
-        el.freeText.value = "";
-        setStatus(s);
-      })
-      .catch((err) => showError(String(err)));
+    startAndClose(sec);
+  }
+
+  function startUntil() {
+    if (!el.untilInput.value) {
+      showError("Pick a date and time.");
+      return;
+    }
+    const target = new Date(el.untilInput.value);
+    const sec = Math.floor((target.getTime() - Date.now()) / 1000);
+    if (sec <= 0) {
+      showError("Pick a date and time in the future.");
+      return;
+    }
+    startAndClose(sec);
+  }
+
+  // ---- About view ----
+
+  function openRepo() {
+    App().OpenRepo();
   }
 
   function wireEvents() {
-    el.btnInfinite.addEventListener("click", () => {
-      App().SetInfinite().then(setStatus).catch((err) => showError(String(err)));
-    });
-    el.btnStop.addEventListener("click", () => {
-      App().Stop().then(setStatus).catch((err) => showError(String(err)));
-    });
     el.btnAddPreset.addEventListener("click", addPreset);
-    el.btnStartDuration.addEventListener("click", startDuration);
-    el.btnStartFreeText.addEventListener("click", startFreeText);
-    el.freeText.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") startFreeText();
-    });
     el.presetMinutes.addEventListener("keydown", (e) => {
       if (e.key === "Enter") addPreset();
     });
@@ -229,16 +265,31 @@
       saveConfig();
     });
 
+    el.tabDuration.addEventListener("click", () => setCustomMode("duration"));
+    el.tabUntil.addEventListener("click", () => setCustomMode("until"));
+    el.btnStartDuration.addEventListener("click", startDuration);
+    el.btnStartFreeText.addEventListener("click", startFreeText);
+    el.freeText.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") startFreeText();
+    });
+    el.btnStartUntil.addEventListener("click", startUntil);
+    el.btnCancelCustom.addEventListener("click", () => App().Hide());
+
+    el.btnRepo.addEventListener("click", openRepo);
+    el.btnCloseAbout.addEventListener("click", () => App().Hide());
+
     window.runtime.EventsOn("mugcup:status", setStatus);
     window.runtime.EventsOn("mugcup:config", setConfig);
+    window.runtime.EventsOn("mugcup:view", showView);
   }
 
   async function init() {
     wireEvents();
     try {
-      const [cfg, st] = await Promise.all([App().GetConfig(), App().GetStatus()]);
+      const [cfg, st, view] = await Promise.all([App().GetConfig(), App().GetStatus(), App().CurrentView()]);
       setConfig(cfg);
       setStatus(st);
+      showView(view);
     } catch (err) {
       showError(String(err));
     }

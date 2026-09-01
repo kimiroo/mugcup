@@ -12,56 +12,84 @@
       <div class="status-pill" id="statusPill">—</div>
     </header>
 
-    <section class="card">
+    <section class="view" id="view-settings" hidden>
+      <section class="card">
+        <h2>Presets</h2>
+        <p class="hint">Edits here change what shows up in the tray's "Timer presets" menu — starting one happens from the tray, not here.</p>
+        <ul class="preset-list" id="presetList"></ul>
+        <div class="preset-add">
+          <input type="number" id="presetMinutes" min="0" placeholder="Minutes (0 = unlimited)">
+          <button class="btn" id="btnAddPreset">+ Add</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>General</h2>
+        <label class="switch-row">
+          <span>Also keep the display on</span>
+          <span class="switch"><input type="checkbox" id="chkDisplayOn"><span class="track"><span class="thumb"></span></span></span>
+        </label>
+        <label class="switch-row">
+          <span>Start automatically with Windows</span>
+          <span class="switch"><input type="checkbox" id="chkAutoStart"><span class="track"><span class="thumb"></span></span></span>
+        </label>
+        <label class="switch-row">
+          <span>Auto update</span>
+          <span class="switch"><input type="checkbox" id="chkAutoUpdate"><span class="track"><span class="thumb"></span></span></span>
+        </label>
+        <label class="select-row">
+          <span>Tray click action</span>
+          <select id="trayClickAction">
+            <option value="cycle">Cycle through presets</option>
+            <option value="infinite">Keep on indefinitely</option>
+            <option value="menu">Open tray menu</option>
+          </select>
+        </label>
+      </section>
+    </section>
+
+    <section class="view" id="view-custom" hidden>
+      <section class="card">
+        <h2>Custom</h2>
+        <div class="tabs">
+          <button class="tab active" id="tabDuration" data-mode="duration" type="button">For a duration</button>
+          <button class="tab" id="tabUntil" data-mode="until" type="button">Until a date &amp; time</button>
+        </div>
+
+        <div class="mode-pane" id="paneDuration">
+          <div class="duration-row">
+            <input type="time" id="durationTime" value="00:30:00" step="1">
+            <button class="btn btn-accent" id="btnStartDuration">Start</button>
+          </div>
+          <div class="duration-row">
+            <input type="text" id="freeText" placeholder="or type e.g. 1h30m, 45m">
+            <button class="btn" id="btnStartFreeText">Start</button>
+          </div>
+        </div>
+
+        <div class="mode-pane" id="paneUntil" hidden>
+          <div class="duration-row">
+            <input type="datetime-local" id="untilInput">
+            <button class="btn btn-accent" id="btnStartUntil">Start</button>
+          </div>
+        </div>
+      </section>
+
       <div class="quick-row">
-        <button class="btn btn-accent" id="btnInfinite">Keep on indefinitely</button>
-        <button class="btn" id="btnStop">Turn off</button>
+        <button class="btn" id="btnCancelCustom">Cancel</button>
       </div>
     </section>
 
-    <section class="card">
-      <h2>Presets</h2>
-      <ul class="preset-list" id="presetList"></ul>
-      <div class="preset-add">
-        <input type="number" id="presetMinutes" min="0" placeholder="Minutes (0 = unlimited)">
-        <button class="btn" id="btnAddPreset">+ Add</button>
-      </div>
-    </section>
+    <section class="view" id="view-about" hidden>
+      <section class="card about-card">
+        <div class="about-title">mugcup</div>
+        <p class="about-tagline">Keep your PC awake, on your terms.</p>
+        <button class="btn" id="btnRepo">View on GitHub</button>
+      </section>
 
-    <section class="card">
-      <h2>Start with a custom duration</h2>
-      <div class="duration-row">
-        <input type="time" id="durationTime" value="00:30:00" step="1">
-        <button class="btn btn-accent" id="btnStartDuration">Start</button>
+      <div class="quick-row">
+        <button class="btn btn-accent" id="btnCloseAbout">Close</button>
       </div>
-      <div class="duration-row">
-        <input type="text" id="freeText" placeholder="or type e.g. 1h30m, 45m">
-        <button class="btn" id="btnStartFreeText">Start</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>General</h2>
-      <label class="switch-row">
-        <span>Also keep the display on</span>
-        <span class="switch"><input type="checkbox" id="chkDisplayOn"><span class="track"><span class="thumb"></span></span></span>
-      </label>
-      <label class="switch-row">
-        <span>Start automatically with Windows</span>
-        <span class="switch"><input type="checkbox" id="chkAutoStart"><span class="track"><span class="thumb"></span></span></span>
-      </label>
-      <label class="switch-row">
-        <span>Auto update</span>
-        <span class="switch"><input type="checkbox" id="chkAutoUpdate"><span class="track"><span class="thumb"></span></span></span>
-      </label>
-      <label class="select-row">
-        <span>Tray click action</span>
-        <select id="trayClickAction">
-          <option value="cycle">Cycle through presets</option>
-          <option value="infinite">Keep on indefinitely</option>
-          <option value="menu">Open tray menu</option>
-        </select>
-      </label>
     </section>
 
     <div class="error" id="errorLabel" hidden></div>
