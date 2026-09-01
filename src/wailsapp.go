@@ -25,6 +25,12 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+var (
+	ole32                           = syscall.NewLazyDLL("ole32.dll")
+	procCoInitializeEx              = ole32.NewProc("CoInitializeEx")
+	coinitApartmentThreaded uintptr = 0x2
+)
+
 //go:embed all:frontend/dist
 var frontendFS embed.FS
 
@@ -41,22 +47,30 @@ const (
 	viewAbout    windowView = "about"
 )
 
-// viewSpec's width is fixed (DisableResize means the user can't touch it
-// anyway), but height ranges between minHeight and maxHeight: the frontend
-// measures its own actual content height on every change (tab switches,
-// toggled fields, a growing preset list) and asks ResizeToContent to match
-// it, so the window's padding stays visually even instead of a static guess
-// leaving leftover space pooling at the bottom.
+// viewSpec's width is always fixed (DisableResize means the user can't touch
+// it anyway). height is only the placeholder shown for the one frame before
+// the frontend's own measurement (see measureContentHeight in app.js) sets
+// the real size via ResizeToContent — the window stays hidden for that whole
+// frame (App.revealPending, set on open and consumed by ResizeToContent), so
+// the placeholder is never actually visible and there's nothing to jump.
+// minHeight/maxHeight bound both that first measurement and any later
+// resizing: Custom's layout genuinely reshapes itself while already open
+// (tab switches, the date toggle), so it keeps resizing for as long as it's
+// shown; Settings' preset list is capped at maxHeight and scrolls internally
+// (.app's overflow-y: auto) past that rather than growing further; About's
+// content never changes once open, so its one measurement is final.
 type viewSpec struct {
 	title                string
-	width                int
+	width, height        int
 	minHeight, maxHeight int
 }
 
 var viewSpecs = map[windowView]viewSpec{
-	viewSettings: {"Settings", 440, 300, 850},
-	viewCustom:   {"Custom", 400, 300, 460},
-	viewAbout:    {"About", 360, 300, 400},
+	viewSettings: {title: "Settings", width: 440, height: 620, minHeight: 360, maxHeight: 620},
+	viewCustom:   {title: "Custom", width: 400, height: 340, minHeight: 300, maxHeight: 460},
+	// About's shared header is hidden for this view (app.js's showView), so
+	// its content is shorter than the other views' by roughly that much.
+	viewAbout: {title: "About", width: 360, height: 310, minHeight: 280, maxHeight: 340},
 }
 
 // App is the Wails-bound backend for the popup window. Every method here is
@@ -65,10 +79,11 @@ type App struct {
 	ctrl    *settings.Controller
 	walkApp *walk.Application
 
-	mu      sync.Mutex
-	ctx     context.Context
-	started bool
-	view    windowView
+	mu            sync.Mutex
+	ctx           context.Context
+	started       bool
+	view          windowView
+	revealPending bool // see ResizeToContent
 }
 
 var wailsApp *App
@@ -98,6 +113,7 @@ func openWindow(view windowView) {
 func (a *App) open(view windowView) {
 	a.mu.Lock()
 	alreadyStarted := a.started
+	prevView := a.view
 	a.started = true
 	a.view = view
 	ctx := a.ctx
@@ -105,9 +121,22 @@ func (a *App) open(view windowView) {
 
 	if alreadyStarted {
 		if ctx != nil {
-			a.applyView(ctx, view)
-			wailsruntime.WindowShow(ctx)
-			wailsruntime.WindowUnminimise(ctx)
+			if view == prevView {
+				// Same view already showing (e.g. a repeat tray click) — just
+				// bring it forward, nothing to resize or re-center.
+				wailsruntime.WindowShow(ctx)
+				wailsruntime.WindowUnminimise(ctx)
+			} else {
+				// Switching views: hide first so the placeholder size
+				// (applyView) and the frontend's DOM swap are never visible,
+				// then let ResizeToContent's revealPending path size, center,
+				// and show it once the new view's real content is measured.
+				wailsruntime.WindowHide(ctx)
+				a.mu.Lock()
+				a.revealPending = true
+				a.mu.Unlock()
+				a.applyView(ctx, view)
+			}
 		}
 		return
 	}
@@ -125,19 +154,18 @@ func (a *App) open(view windowView) {
 	go a.run(view)
 }
 
-// applyView pushes the window chrome (title, size bounds) and tells the
+// applyView pushes the window chrome (title, placeholder size) and tells the
 // already-loaded frontend which view to render, for switching views in a
-// window that's already open. The very first open sizes itself from
-// viewSpecs directly in run(), before the window exists. The actual height
-// starts at minHeight as a placeholder; the frontend corrects it via
-// ResizeToContent within a frame of the view becoming visible.
+// window that's already open. This placeholder sizing is never actually
+// seen — the caller (open) hides the window first, and ResizeToContent's
+// revealPending path centers and shows it once the new view's real content
+// is measured — so there's nothing to visibly grow or jump into.
 func (a *App) applyView(ctx context.Context, view windowView) {
 	spec := viewSpecs[view]
 	wailsruntime.WindowSetTitle(ctx, spec.title)
 	wailsruntime.WindowSetMinSize(ctx, spec.width, spec.minHeight)
 	wailsruntime.WindowSetMaxSize(ctx, spec.width, spec.maxHeight)
-	wailsruntime.WindowSetSize(ctx, spec.width, spec.minHeight)
-	wailsruntime.WindowCenter(ctx)
+	wailsruntime.WindowSetSize(ctx, spec.width, spec.height)
 	wailsruntime.EventsEmit(ctx, "mugcup:view", string(view))
 }
 
@@ -148,6 +176,19 @@ func (a *App) run(view windowView) {
 	// silently breaks that requirement (the window sometimes just never
 	// appears) — so this goroutine, which does nothing else, is pinned here.
 	runtime.LockOSThread()
+
+	// go-webview2's own package init() calls CoInitializeEx too, but that
+	// runs on whatever OS thread executes Go's package-init phase (in
+	// practice, the main goroutine's thread — see main.go's LockOSThread).
+	// This goroutine is a different one, pinned to a different OS thread
+	// above, which never gets that call — COM apartment state is per-thread,
+	// so without this, WebView2's environment creation fails with
+	// CO_E_NOTINITIALIZED ("CoInitialize has not been called") on whichever
+	// thread the Go scheduler happens to hand it, silently leaving a blank
+	// window. Must run before wails.Run, on this exact thread.
+	if hr, _, _ := procCoInitializeEx.Call(0, coinitApartmentThreaded); hr != 0 && hr != 1 {
+		popupLogger.Printf("CoInitializeEx failed: 0x%x", hr)
+	}
 
 	// If the window never actually starts (error, panic, or wails.Run
 	// returning early for any reason before OnStartup fires), un-stick
@@ -172,13 +213,18 @@ func (a *App) run(view windowView) {
 
 	spec := viewSpecs[view]
 	err = wails.Run(&options.App{
-		Title:            spec.title,
-		Width:            spec.width,
-		Height:           spec.minHeight,
-		MinWidth:         spec.width,
-		MinHeight:        spec.minHeight,
-		MaxWidth:         spec.width,
-		MaxHeight:        spec.maxHeight,
+		Title:     spec.title,
+		Width:     spec.width,
+		Height:    spec.height,
+		MinWidth:  spec.width,
+		MinHeight: spec.minHeight,
+		MaxWidth:  spec.width,
+		MaxHeight: spec.maxHeight,
+		// The window stays hidden until ResizeToContent's revealPending path
+		// (set below, in startup) sizes and centers it from the frontend's
+		// real measured content — so the placeholder size above is never
+		// actually seen and there's nothing to visibly jump into.
+		StartHidden:      true,
 		DisableResize:    true,
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
 		AssetServer:      &assetserver.Options{Assets: assets},
@@ -203,6 +249,7 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Lock()
 	a.ctx = ctx
 	view := a.view
+	a.revealPending = true
 	a.mu.Unlock()
 
 	// Push live config updates so the window reflects changes made elsewhere
@@ -248,6 +295,10 @@ func (a *App) ShowError(message string) {
 // additional IPC round-trip.
 func (a *App) Version() string { return Version }
 
+// BuildVariant returns the build-time release channel ("stable", "beta", or
+// "dev"), shown alongside Version in the About view.
+func (a *App) BuildVariant() string { return BuildVariant }
+
 // CurrentView reports which view the window should render. The frontend
 // calls this once on load, since it can't rely on catching the startup
 // "mugcup:view" event if its listener attaches after that event fired.
@@ -264,11 +315,18 @@ func (a *App) CurrentView() string {
 // content-to-window sizing consistent at other scales too.
 const windowChromeHeight = 39
 
-// ResizeToContent resizes the popup window's height to fit contentHeight,
-// the frontend's own measurement of its actual rendered content (see
-// measureContentHeight in app.js), clamped to the current view's
-// min/maxHeight via the WindowSetMinSize/WindowSetMaxSize calls in
-// applyView. Width never changes — only height varies content-to-content.
+// ResizeToContent live-resizes the popup window's height to fit
+// contentHeight, the frontend's own measurement of its actual rendered
+// content (see measureContentHeight in app.js) — called unconditionally on
+// every view render (initial open, view switch, or in-place layout changes
+// like Custom's tab switches and Settings' preset list).
+//
+// It also drives the reveal: open() (fresh start via StartHidden, or a view
+// switch) sets revealPending and keeps the window hidden until this, the
+// first resize with real content, fires — at which point it centers and
+// shows the window at its correct final size instead of a placeholder that
+// visibly snaps into place. Later calls for the same view (Custom's tab
+// switches) find revealPending already false and just resize in place.
 func (a *App) ResizeToContent(contentHeight int) {
 	a.mu.Lock()
 	ctx := a.ctx
@@ -279,6 +337,16 @@ func (a *App) ResizeToContent(contentHeight int) {
 	}
 	spec := viewSpecs[view]
 	wailsruntime.WindowSetSize(ctx, spec.width, contentHeight+windowChromeHeight)
+
+	a.mu.Lock()
+	reveal := a.revealPending
+	a.revealPending = false
+	a.mu.Unlock()
+	if reveal {
+		wailsruntime.WindowCenter(ctx)
+		wailsruntime.WindowShow(ctx)
+		wailsruntime.WindowUnminimise(ctx)
+	}
 }
 
 // OpenRepo opens the project's GitHub page in the system's default browser.

@@ -1,2 +1,3 @@
 /build
 *.exe
+resource_windows_*.syso

@@ -4,6 +4,7 @@
   const App = () => window.go.main.App;
 
   const el = {
+    head: document.getElementById("appHead"),
     viewSettings: document.getElementById("view-settings"),
     viewCustom: document.getElementById("view-custom"),
     viewAbout: document.getElementById("view-about"),
@@ -83,6 +84,9 @@
     Object.entries(views).forEach(([key, node]) => {
       node.hidden = key !== name;
     });
+    // About's own card already shows "mugcup" (with the same emoji as the
+    // header) as its title, so the shared header would just be a duplicate.
+    el.head.hidden = name === "about";
     if (name === "custom") resetCustomForm();
     scheduleResize();
   }
@@ -101,6 +105,11 @@
   // live during dragover, so the list doesn't reflow under the cursor.
   let dragIndex = null;
 
+  // Calls scheduleResize() itself since it runs both on the initial render
+  // (redundant with showView's own scheduleResize(), harmless) and on every
+  // preset add/remove/reorder while the Settings window is already open —
+  // the window is dynamic (wailsapp.go's viewSpecs) up to its maxHeight, and
+  // scrolls internally (.app's overflow-y: auto) past that.
   function renderPresets() {
     el.presetList.innerHTML = "";
     if (!config.timerList.length) {
@@ -395,14 +404,15 @@
   async function init() {
     wireEvents();
     try {
-      const [cfg, view, ver] = await Promise.all([
+      const [cfg, view, ver, variant] = await Promise.all([
         App().GetConfig(),
         App().CurrentView(),
         App().Version(),
+        App().BuildVariant(),
       ]);
       setConfig(cfg);
       showView(view);
-      el.aboutVersion.textContent = "Version " + ver;
+      el.aboutVersion.textContent = `Version ${ver} (${variant})`;
     } catch (err) {
       showError(String(err));
     }

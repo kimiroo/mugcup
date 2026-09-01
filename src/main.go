@@ -28,13 +28,14 @@ func init() {
 }
 
 func init() {
-	// manifest.xml (embedded as rsrc.syso) predates WebView2 and doesn't
+	// manifest.xml (embedded via go tool goversioninfo into
+	// resource_windows_*.syso — see build.ps1) predates WebView2 and doesn't
 	// declare DPI awareness, so Windows would otherwise DPI-virtualize this
 	// process's windows while WebView2 renders its content at the real DPI
 	// internally — the two drift apart at any scale other than 100%, and
 	// fixed window sizes stop matching their content. Declaring Per-Monitor-v2
 	// awareness here (before any window exists) avoids needing to touch the
-	// prebuilt rsrc.syso.
+	// manifest.
 	if procSetProcessDpiAwarenessContext.Find() == nil {
 		procSetProcessDpiAwarenessContext.Call(dpiAwarenessContextPerMonitorAwareV2)
 	}
@@ -81,11 +82,17 @@ const (
 	idYes = 6
 )
 
-// Version is set at build time via -ldflags "-X main.Version=1.2.3"
-// (build.ps1 does this automatically from the nearest git tag). The default,
-// "dev", marks a local/unreleased build; self-update is disabled for those,
-// since there's no meaningful version to compare against a release.
-var Version = "dev"
+// Version and BuildVariant are set at build time via -ldflags
+// "-X main.Version=1.2.3 -X main.BuildVariant=stable" — build.ps1 does this
+// automatically from version.yaml (the single source of truth for both).
+// Version's default, "dev", marks a local/unreleased build; self-update is
+// disabled for those, since there's no meaningful version to compare
+// against a release. BuildVariant selects which release channel self-update
+// draws from ("stable", "rc", "beta", or "dev" — see update.CheckLatest).
+var (
+	Version      = "dev"
+	BuildVariant = "dev"
+)
 
 // showUseCliWarning shows a native message box without needing walk
 // initialized, for when mugcup.exe is launched with CLI-style arguments.
@@ -271,7 +278,7 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 		// once the CLI has already moved on — hence the goroutine + native
 		// dialog on failure, same as checkForUpdatesInteractive.
 		go func() {
-			rel, found, err := update.CheckLatest(context.Background(), Version)
+			rel, found, err := update.CheckLatest(context.Background(), Version, BuildVariant)
 			if err != nil {
 				showUpdateFailure(err)
 				return

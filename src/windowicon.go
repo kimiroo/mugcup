@@ -53,10 +53,11 @@ func extractIconFile() string {
 // icon loaded directly from our own embedded icon.ico, instead of relying on
 // Wails' built-in behavior of loading it from the exe's PE resources: Wails
 // hardcodes resource ID 3 for that (winc.AppIconID in
-// wailsapp/wails/v2/internal/frontend/desktop/windows/winc), which our
-// rsrc.syso doesn't happen to produce (its icon group lands on ID 2, since
-// the manifest resource takes ID 1 first), so Wails' own lookup silently
-// finds nothing and leaves the window with no icon.
+// wailsapp/wails/v2/internal/frontend/desktop/windows/winc), which our own
+// resource_windows_*.syso (icon + manifest + version info, embedded via go
+// tool goversioninfo — see build.ps1) doesn't happen to produce at that
+// exact ID, so Wails' own lookup silently finds nothing and leaves the
+// window with no icon.
 func setPopupWindowIcon() {
 	path := extractIconFile()
 	if path == "" {

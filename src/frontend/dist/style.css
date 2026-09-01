@@ -59,6 +59,14 @@ html, body {
   padding: 2px 2px 6px;
 }
 
+/* Same specificity issue .view[hidden] below exists for: the [hidden]
+   attribute's UA-default display:none loses to .head's own display:flex
+   at equal specificity, so hiding it (About view — app.js's showView)
+   needs this explicit override. */
+.head[hidden] {
+  display: none;
+}
+
 .head-title {
   font-size: 22px;
   font-weight: 600;

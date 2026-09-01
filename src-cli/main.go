@@ -9,6 +9,14 @@ import (
 	"strings"
 )
 
+// Version and BuildVariant are set at build time via -ldflags
+// "-X main.Version=1.2.3 -X main.BuildVariant=stable" — build.ps1 does this
+// automatically from version.yaml, same as it does for mugcup.exe.
+var (
+	Version      = "dev"
+	BuildVariant = "dev"
+)
+
 type options struct {
 	displayOn       *bool
 	autoStart       *bool
@@ -57,6 +65,7 @@ Commands:
   exit                     Exit the running mugcup
   import <path.json>       Read a config file and apply it (stdin if omitted)
   export <path.json>       Save the current config to a file (stdout if omitted)
+  version                  Show mugcup-cli's own version and build variant
   help                     Show this help
 
 Options:
@@ -224,6 +233,10 @@ func main() {
 	command := strings.ToLower(args[0])
 	if command == "help" || command == "-h" || command == "--help" || command == "/?" {
 		printHelp()
+		return
+	}
+	if command == "version" || command == "-v" || command == "--version" {
+		fmt.Printf("mugcup-cli %s (%s)\n", Version, BuildVariant)
 		return
 	}
 

@@ -1,9 +1,12 @@
 param(
     [string[]]$Architectures = @("amd64", "x86", "arm64"),
-    # Version baked into both binaries (self-update compares against this).
-    # Defaults to the nearest git tag (without a leading "v"); falls back to
-    # "dev" if there's no tag, which disables self-update in the built app.
-    [string]$Version = ""
+    # Version and build variant baked into both binaries (self-update
+    # compares Version against releases and only considers Variant's
+    # channel — see src/update/update.go). Both default to version.yaml (the
+    # single source of truth for a release); these params only exist to
+    # override it for one-off builds.
+    [string]$Version = "",
+    [string]$Variant = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,25 +17,102 @@ $projectRoot = $PSScriptRoot
 $guiSourceRoot = Join-Path $projectRoot "src"
 $cliSourceRoot = Join-Path $projectRoot "src-cli"
 
-if (-not $Version) {
-    $Version = "dev"
-    try {
-        $tag = git -C $projectRoot describe --tags --abbrev=0 2>$null
-        if ($LASTEXITCODE -eq 0 -and $tag) {
-            $Version = $tag.Trim().TrimStart("v")
+# ---- version.yaml (single source of truth for Version/Variant) ----
+# Deliberately flat (no nesting) so this regex parser is enough — no YAML
+# module dependency for a plain PowerShell script. Go code never reads this
+# file itself; it's only consumed here, at build time.
+function Read-VersionYaml {
+    param([string]$Path)
+    $values = @{}
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $values
+    }
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -match '^\s*#') { continue }
+        if ($line -match '^\s*(\w+)\s*:\s*(.+?)\s*$') {
+            $values[$matches[1]] = $matches[2].Trim('"', "'")
         }
-    } catch {
-        # git not available or no tags yet; keep "dev".
+    }
+    return $values
+}
+
+$versionYamlPath = Join-Path $projectRoot "version.yaml"
+$versionYaml = Read-VersionYaml -Path $versionYamlPath
+
+if (-not $Version) {
+    if ($versionYaml.ContainsKey("version") -and $versionYaml["version"]) {
+        $Version = $versionYaml["version"]
+    } else {
+        # Legacy fallback if version.yaml has no version set: nearest git tag,
+        # or "dev" (which disables self-update in the built app) if none.
+        $Version = "dev"
+        try {
+            $tag = git -C $projectRoot describe --tags --abbrev=0 2>$null
+            if ($LASTEXITCODE -eq 0 -and $tag) {
+                $Version = $tag.Trim().TrimStart("v")
+            }
+        } catch {
+            # git not available or no tags yet; keep "dev".
+        }
     }
 }
-Write-Host "Building version: $Version"
-$versionLdflags = "-X main.Version=$Version"
+if (-not $Variant) {
+    $Variant = if ($versionYaml.ContainsKey("variant") -and $versionYaml["variant"]) { $versionYaml["variant"] } else { "dev" }
+}
+Write-Host "Building version: $Version ($Variant)"
+$versionLdflags = "-X main.Version=$Version -X main.BuildVariant=$Variant"
+
+# Numeric parts for the exe's VERSIONINFO resource (Explorer's Details tab).
+# Non-semver strings (e.g. "dev") just fall back to 0.0.0 — the string
+# fields below still show $Version as-is regardless.
+$verMajor, $verMinor, $verPatch = 0, 0, 0
+if ($Version -match '^(\d+)\.(\d+)\.(\d+)') {
+    $verMajor, $verMinor, $verPatch = [int]$matches[1], [int]$matches[2], [int]$matches[3]
+}
 
 if (-not (Test-Path -LiteralPath $guiSourceRoot -PathType Container)) {
     throw "GUI source directory not found: $guiSourceRoot"
 }
 if (-not (Test-Path -LiteralPath $cliSourceRoot -PathType Container)) {
     throw "CLI source directory not found: $cliSourceRoot"
+}
+
+# ---- Windows resources (icon + manifest + version info) ----
+# resource_windows_<goarch>.syso is Go's own naming convention for
+# arch-specific .syso files — the toolchain picks the right one per build
+# automatically, so (unlike the old single rsrc.syso) there's no need to
+# hide/restore anything for x86. Regenerated fresh on every build so the
+# embedded version always matches $Version; gitignored as a build artifact.
+$guiIconPath = Join-Path $guiSourceRoot "assets/icon.ico"
+$guiManifestPath = Join-Path $guiSourceRoot "manifest.xml"
+Push-Location $guiSourceRoot
+try {
+    go tool goversioninfo -platform-specific `
+        -icon $guiIconPath -manifest $guiManifestPath `
+        -ver-major $verMajor -ver-minor $verMinor -ver-patch $verPatch -ver-build 0 `
+        -product-ver-major $verMajor -product-ver-minor $verMinor -product-ver-patch $verPatch -product-ver-build 0 `
+        -file-version $Version -product-version $Version `
+        versioninfo.json
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to generate the GUI's Windows resources (goversioninfo)."
+    }
+} finally {
+    Pop-Location
+}
+Push-Location $cliSourceRoot
+try {
+    # Same icon as the GUI, no manifest (a console app doesn't need one).
+    go tool goversioninfo -platform-specific `
+        -icon $guiIconPath `
+        -ver-major $verMajor -ver-minor $verMinor -ver-patch $verPatch -ver-build 0 `
+        -product-ver-major $verMajor -product-ver-minor $verMinor -product-ver-patch $verPatch -product-ver-build 0 `
+        -file-version $Version -product-version $Version `
+        versioninfo.json
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to generate the CLI's Windows resources (goversioninfo)."
+    }
+} finally {
+    Pop-Location
 }
 
 $buildRoot = Join-Path $projectRoot "build"
@@ -62,31 +142,12 @@ try {
         # ---- GUI build (src) ----
         Push-Location $guiSourceRoot
         try {
-            # rsrc.syso is a 64-bit resource object the 32-bit linker can't use,
-            # so hide it for x86 builds only and always restore it afterward.
-            $resourcePath = Join-Path $guiSourceRoot "rsrc.syso"
-            $hiddenResourcePath = "$resourcePath.build-disabled"
-            $resourceHidden = $false
-            if ($architecture -eq "x86" -and (Test-Path -LiteralPath $resourcePath)) {
-                if (Test-Path -LiteralPath $hiddenResourcePath) {
-                    throw "Temporary resource file already exists: $hiddenResourcePath"
-                }
-                Move-Item -LiteralPath $resourcePath -Destination $hiddenResourcePath
-                $resourceHidden = $true
-            }
-
-            try {
-                # "desktop,production" are required by Wails v2 to select the
-                # real desktop frontend and disable the dev inspector/console.
-                $guiOutputPath = Join-Path $outputDir "mugcup.exe"
-                go build -tags "desktop,production" -ldflags "-H=windowsgui -s -w $versionLdflags" -o $guiOutputPath .
-                if ($LASTEXITCODE -ne 0) {
-                    throw "$architecture GUI build failed."
-                }
-            } finally {
-                if ($resourceHidden) {
-                    Move-Item -LiteralPath $hiddenResourcePath -Destination $resourcePath
-                }
+            # "desktop,production" are required by Wails v2 to select the
+            # real desktop frontend and disable the dev inspector/console.
+            $guiOutputPath = Join-Path $outputDir "mugcup.exe"
+            go build -tags "desktop,production" -ldflags "-H=windowsgui -s -w $versionLdflags" -o $guiOutputPath .
+            if ($LASTEXITCODE -ne 0) {
+                throw "$architecture GUI build failed."
             }
         } finally {
             Pop-Location
@@ -95,29 +156,11 @@ try {
         # ---- CLI build (src-cli) ----
         Push-Location $cliSourceRoot
         try {
-            # Same 64-bit-only rsrc.syso limitation as the GUI build above.
-            $cliResourcePath = Join-Path $cliSourceRoot "rsrc.syso"
-            $cliHiddenResourcePath = "$cliResourcePath.build-disabled"
-            $cliResourceHidden = $false
-            if ($architecture -eq "x86" -and (Test-Path -LiteralPath $cliResourcePath)) {
-                if (Test-Path -LiteralPath $cliHiddenResourcePath) {
-                    throw "Temporary resource file already exists: $cliHiddenResourcePath"
-                }
-                Move-Item -LiteralPath $cliResourcePath -Destination $cliHiddenResourcePath
-                $cliResourceHidden = $true
-            }
-
-            try {
-                # Go's default subsystem on Windows is console.
-                $cliOutputPath = Join-Path $outputDir "mugcup-cli.exe"
-                go build -ldflags $versionLdflags -o $cliOutputPath .
-                if ($LASTEXITCODE -ne 0) {
-                    throw "$architecture CLI build failed."
-                }
-            } finally {
-                if ($cliResourceHidden) {
-                    Move-Item -LiteralPath $cliHiddenResourcePath -Destination $cliResourcePath
-                }
+            # Go's default subsystem on Windows is console.
+            $cliOutputPath = Join-Path $outputDir "mugcup-cli.exe"
+            go build -ldflags $versionLdflags -o $cliOutputPath .
+            if ($LASTEXITCODE -ne 0) {
+                throw "$architecture CLI build failed."
             }
         } finally {
             Pop-Location

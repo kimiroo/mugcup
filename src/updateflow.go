@@ -27,7 +27,7 @@ func maybeAutoCheckUpdate(ctrl *settings.Controller, app *walk.Application) {
 		return
 	}
 
-	rel, found, err := update.CheckLatest(context.Background(), Version)
+	rel, found, err := update.CheckLatest(context.Background(), Version, BuildVariant)
 	if err != nil {
 		updateLogger.Println("update check failed:", err)
 		return
@@ -54,7 +54,7 @@ func handleUpdateCheck() ipc.Response {
 		return ipc.Response{Success: true, Message: "This is a development build, so it can't check for updates.", Update: &ipc.UpdatePayload{Available: false}}
 	}
 
-	rel, found, err := update.CheckLatest(context.Background(), Version)
+	rel, found, err := update.CheckLatest(context.Background(), Version, BuildVariant)
 	if err != nil {
 		return ipc.Response{Success: false, Message: "failed to check for updates: " + err.Error()}
 	}
@@ -79,7 +79,7 @@ func checkForUpdatesInteractive(app *walk.Application) {
 		return
 	}
 
-	rel, found, err := update.CheckLatest(context.Background(), Version)
+	rel, found, err := update.CheckLatest(context.Background(), Version, BuildVariant)
 	if err != nil {
 		showUpdateFailure(err)
 		return

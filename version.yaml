@@ -1,0 +1,21 @@
+# version.yaml - single source of truth for mugcup's version and build
+# variant. build.ps1 reads this (with a small regex parser - keep this file
+# flat, no nesting, so that parser doesn't need a real YAML library) and
+# bakes both into the GUI and CLI binaries via -ldflags. Nothing at runtime
+# reads this file directly; it only exists at build time.
+
+# Semantic version (no leading "v"). Bump this as part of cutting a release;
+# build.ps1's -Version flag can still override it for one-off builds.
+version: 0.1.0
+
+# Which update channel this build belongs to - decides which GitHub release
+# tags self-update will even consider (see channelRank in src/update/update.go).
+# Channels are ranked from most to least stable, and a build accepts any
+# release at its own rank or more stable (picking whichever is semver-highest):
+#   stable - only tags with no prerelease identifier, e.g. v1.2.3
+#   rc     - v1.2.3-rc.N, or stable
+#   beta   - v1.2.3-beta.N, or rc, or stable
+#   dev    - unreleased/local builds; self-update is disabled outright,
+#            same as today's Version == "dev" sentinel (not part of the
+#            rank above - it never lists releases in the first place)
+variant: beta
