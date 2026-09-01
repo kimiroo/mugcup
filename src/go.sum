@@ -1,0 +1,16 @@
+fyne.io/systray v1.12.2 h1:Y8DZxgLHsVQt6rY9Zrkkg+j67S7vv/1F2viOWKPpVeA=
+fyne.io/systray v1.12.2/go.mod h1:RVwqP9nYMo7h5zViCBHri2FgjXF7H2cub7MAq4NSoLs=
+github.com/dblohm7/wingoes v0.0.0-20231019175336-f6e33aa7cc34 h1:FBMro26TLQwBk+n4fbTSmSf3QUKb09pvW4fz49lxpl0=
+github.com/dblohm7/wingoes v0.0.0-20231019175336-f6e33aa7cc34/go.mod h1:6NCrWM5jRefaG7iN0iMShPalLsljHWBh9v1zxM2f8Xs=
+github.com/godbus/dbus/v5 v5.1.0 h1:4KLkAxT3aOY8Li4FRJe/KvhoNFFxo0m6fNuFUO8QJUk=
+github.com/godbus/dbus/v5 v5.1.0/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
+github.com/tailscale/walk v0.0.0-20260702185836-28b80ea70d3b h1:bB3RTsRQPZ0SaJoYoDwloiKsh7iVyCDLtZZ+2VdmKpE=
+github.com/tailscale/walk v0.0.0-20260702185836-28b80ea70d3b/go.mod h1:9Kzibqz+6ANk3Bqj4MXHqyWvbGw0Wy+e5S5xFKsGzp0=
+github.com/tailscale/win v0.0.0-20260619195133-2d76c33a64c1 h1:QzOW7bZOlg5/hi1W6dStSN9qazTHkHj5kO7sTA5aymY=
+github.com/tailscale/win v0.0.0-20260619195133-2d76c33a64c1/go.mod h1:vwG7VvIPzIYNJd0Nio6PZW7yr8KNNFEc8EVQ+J/B4bk=
+golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53 h1:5llv2sWeaMSnA3w2kS57ouQQ4pudlXrR0dCgw51QK9o=
+golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53/go.mod h1:V1LtkGg67GoY2N1AnLN78QLrzxkLyJw7RJb1gzOOz9w=
+golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
+golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
+gopkg.in/Knetic/govaluate.v3 v3.0.0 h1:18mUyIt4ZlRlFZAAfVetz4/rzlJs9yhN+U02F4u1AOc=
+gopkg.in/Knetic/govaluate.v3 v3.0.0/go.mod h1:csKLBORsPbafmSCGTEh3U7Ozmsuq8ZSIlKk1bcqph0E=
