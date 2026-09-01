@@ -121,3 +121,61 @@ func TestValidateConfig(t *testing.T) {
 		t.Error("unknown tray action should be rejected")
 	}
 }
+
+func TestParseConfigJSON(t *testing.T) {
+	valid := `{
+		"autoStart": true,
+		"keepDisplayOn": false,
+		"autoUpdateCheck": true,
+		"autoUpdateApply": false,
+		"timerList": [900, 1800, 0],
+		"trayClickAction": "cycle"
+	}`
+	cfg, err := ParseConfigJSON([]byte(valid))
+	if err != nil {
+		t.Fatalf("valid config JSON should parse: %v", err)
+	}
+	if !cfg.AutoStart || cfg.KeepDisplayOn || len(cfg.TimerList) != 3 || cfg.TrayClickAction != ActionCycle {
+		t.Errorf("parsed config doesn't match input: %+v", cfg)
+	}
+
+	missingKey := `{
+		"autoStart": true,
+		"keepDisplayOn": false,
+		"autoUpdateCheck": true,
+		"autoUpdateApply": false,
+		"timerList": [900]
+	}`
+	if _, err := ParseConfigJSON([]byte(missingKey)); err == nil {
+		t.Error("a missing key (trayClickAction) should be rejected")
+	}
+
+	extraKey := valid[:len(valid)-1] + `, "extra": 1}`
+	if _, err := ParseConfigJSON([]byte(extraKey)); err == nil {
+		t.Error("an unexpected extra key should be rejected")
+	}
+
+	wrongType := `{
+		"autoStart": "true",
+		"keepDisplayOn": false,
+		"autoUpdateCheck": true,
+		"autoUpdateApply": false,
+		"timerList": [900, 1800, 0],
+		"trayClickAction": "cycle"
+	}`
+	if _, err := ParseConfigJSON([]byte(wrongType)); err == nil {
+		t.Error("a string value for a bool field should be rejected")
+	}
+
+	wrongElementType := `{
+		"autoStart": true,
+		"keepDisplayOn": false,
+		"autoUpdateCheck": true,
+		"autoUpdateApply": false,
+		"timerList": ["not-a-number"],
+		"trayClickAction": "cycle"
+	}`
+	if _, err := ParseConfigJSON([]byte(wrongElementType)); err == nil {
+		t.Error("a non-numeric timerList element should be rejected")
+	}
+}

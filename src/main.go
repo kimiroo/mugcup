@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -352,8 +351,8 @@ func handleImport(ctrl *settings.Controller, raw string) ipc.Response {
 		settingsLogger.Println("Import rejected: empty config JSON.")
 		return ipc.Response{Success: false, Message: "the config JSON to import is empty."}
 	}
-	var cfg settings.Config
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+	cfg, err := settings.ParseConfigJSON([]byte(raw))
+	if err != nil {
 		settingsLogger.Printf("Import failed: invalid config JSON: %v", err)
 		return ipc.Response{Success: false, Message: "failed to parse config JSON: " + err.Error()}
 	}
