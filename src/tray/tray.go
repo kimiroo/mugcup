@@ -38,10 +38,8 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 	state := ctrl.State()
 	updateTooltip(state)
 
-	mKeepDisplay := systray.AddMenuItemCheckbox("Keep display on", "Also keep the display from turning off", cfg.KeepDisplayOn)
-	mInfinite := systray.AddMenuItemCheckbox("Keep on indefinitely", "Keep the system awake indefinitely", state.Active && state.Infinite)
-
-	mPresets := systray.AddMenuItemCheckbox("Timer presets", "Choose a preset duration", state.PresetActive)
+	mInfinite := systray.AddMenuItemCheckbox("Indefinitely", "Keep the system awake indefinitely", state.Active && state.Infinite)
+	mPresets := systray.AddMenuItemCheckbox("Preset", "Choose a preset duration", state.PresetActive)
 
 	type presetItem struct {
 		item    *systray.MenuItem
@@ -94,14 +92,16 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 
 	rebuildPresets(cfg.TimerList)
 
-	mOff := systray.AddMenuItemCheckbox("Off", "Turn off the timer", !state.Active)
 	mCustom := systray.AddMenuItem("Custom...", "Start for a custom duration or until a specific time")
+	mOff := systray.AddMenuItemCheckbox("Turn off", "Turn off the timer", !state.Active)
 
 	systray.AddSeparator()
-	mSettings := systray.AddMenuItem("Settings...", "Open settings window")
-	mAbout := systray.AddMenuItem("About", "About mugcup")
+	mKeepDisplay := systray.AddMenuItemCheckbox("Keep display on", "Also keep the display from turning off", cfg.KeepDisplayOn)
+	mSettings := systray.AddMenuItem("Settings", "Open settings window")
+
 	systray.AddSeparator()
-	mQuit := systray.AddMenuItem("Exit", "Exit mugcup")
+	mAbout := systray.AddMenuItem("About", "About mugcup")
+	mQuit := systray.AddMenuItem("Quit", "Quit mugcup")
 
 	updateTapHandler := func(action settings.TrayClickAction) {
 		if action == settings.ActionOpenMenu {

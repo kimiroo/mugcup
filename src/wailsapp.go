@@ -175,6 +175,7 @@ func (a *App) run(view windowView) {
 			BackdropType:         wailswindows.Mica,
 			Theme:                wailswindows.SystemDefault,
 			Messages:             wailswindows.DefaultMessages(),
+			WindowClassName:      popupWindowClassName,
 		},
 	})
 	if err != nil {
@@ -188,14 +189,15 @@ func (a *App) startup(ctx context.Context) {
 	view := a.view
 	a.mu.Unlock()
 
-	// Push live updates so the window reflects changes made elsewhere (CLI,
-	// tray) while it's open, not just what was true when it was opened.
-	a.ctrl.OnStateChange(func(settings.State) {
-		wailsruntime.EventsEmit(ctx, "mugcup:status", statusPayload(a.ctrl))
-	})
+	// Push live config updates so the window reflects changes made elsewhere
+	// (CLI, tray) while it's open, not just what was true when it was opened.
+	// Timer state isn't shown in this window (that's the tray's job), so
+	// there's no equivalent state subscription.
 	a.ctrl.OnConfigChange(func(settings.Config) {
 		wailsruntime.EventsEmit(ctx, "mugcup:config", configPayload(a.ctrl))
 	})
+
+	setPopupWindowIcon()
 
 	// Also emit the view on startup for good measure; CurrentView() is what
 	// the frontend actually relies on for its first render, since it can't
@@ -213,7 +215,6 @@ func (a *App) beforeClose(ctx context.Context) bool {
 // ---- Bound methods (called from frontend/dist/app.js) ----
 
 func (a *App) GetConfig() *ipc.ConfigPayload { return configPayload(a.ctrl) }
-func (a *App) GetStatus() *ipc.StatusPayload { return statusPayload(a.ctrl) }
 
 // CurrentView reports which view the window should render. The frontend
 // calls this once on load, since it can't rely on catching the startup

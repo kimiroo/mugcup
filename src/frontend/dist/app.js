@@ -4,8 +4,6 @@
   const App = () => window.go.main.App;
 
   const el = {
-    statusPill: document.getElementById("statusPill"),
-
     viewSettings: document.getElementById("view-settings"),
     viewCustom: document.getElementById("view-custom"),
     viewAbout: document.getElementById("view-about"),
@@ -43,9 +41,6 @@
   };
 
   let config = null; // last known ConfigPayload
-  let status = null; // last known StatusPayload
-  let tickBase = 0; // Date.now() when `status` was captured
-  let tickTimer = null;
 
   function showError(message) {
     el.errorLabel.textContent = message;
@@ -70,35 +65,6 @@
     return `${m}m`;
   }
 
-  function formatRemaining(active, infinite, sec) {
-    if (!active) return "Off";
-    if (infinite) return "Indefinite";
-    sec = Math.max(0, sec);
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = sec % 60;
-    if (h > 0) return `${h}h ${m}m left`;
-    return `${m}m ${s}s left`;
-  }
-
-  function currentRemainingSec() {
-    if (!status || !status.active || status.infinite) return status ? status.remainingSec : 0;
-    const elapsed = Math.floor((Date.now() - tickBase) / 1000);
-    return Math.max(0, status.remainingSec - elapsed);
-  }
-
-  function renderStatus() {
-    if (!status) return;
-    el.statusPill.textContent = formatRemaining(status.active, status.infinite, currentRemainingSec());
-    el.statusPill.classList.toggle("active", status.active);
-  }
-
-  function setStatus(s) {
-    status = s;
-    tickBase = Date.now();
-    renderStatus();
-  }
-
   function renderPresets() {
     el.presetList.innerHTML = "";
     if (!config.timerList.length) {
@@ -108,6 +74,7 @@
       el.presetList.appendChild(empty);
       return;
     }
+    const last = config.timerList.length - 1;
     config.timerList.forEach((sec, index) => {
       const li = document.createElement("li");
       li.className = "preset-item";
@@ -116,14 +83,35 @@
       label.className = "preset-label";
       label.textContent = formatPresetSec(sec);
 
+      const actions = document.createElement("span");
+      actions.className = "preset-actions";
+
+      const up = document.createElement("button");
+      up.className = "preset-move";
+      up.textContent = "▲";
+      up.title = "Move up";
+      up.disabled = index === 0;
+      up.addEventListener("click", () => movePreset(index, -1));
+
+      const down = document.createElement("button");
+      down.className = "preset-move";
+      down.textContent = "▼";
+      down.title = "Move down";
+      down.disabled = index === last;
+      down.addEventListener("click", () => movePreset(index, 1));
+
       const remove = document.createElement("button");
       remove.className = "preset-remove";
       remove.textContent = "✕";
       remove.title = "Remove preset";
       remove.addEventListener("click", () => removePreset(index));
 
+      actions.appendChild(up);
+      actions.appendChild(down);
+      actions.appendChild(remove);
+
       li.appendChild(label);
-      li.appendChild(remove);
+      li.appendChild(actions);
       el.presetList.appendChild(li);
     });
   }
@@ -156,13 +144,27 @@
     saveConfig();
   }
 
+  function movePreset(index, delta) {
+    const target = index + delta;
+    if (target < 0 || target >= config.timerList.length) return;
+    const list = config.timerList;
+    [list[index], list[target]] = [list[target], list[index]];
+    renderPresets();
+    saveConfig();
+  }
+
   function addPreset() {
     const minutes = parseInt(el.presetMinutes.value, 10);
     if (isNaN(minutes) || minutes < 0) {
       showError("Enter a whole number of minutes (0 = unlimited).");
       return;
     }
-    config.timerList.push(minutes * 60);
+    const sec = minutes * 60;
+    if (config.timerList.includes(sec)) {
+      showError("That preset already exists.");
+      return;
+    }
+    config.timerList.push(sec);
     el.presetMinutes.value = "";
     renderPresets();
     saveConfig();
@@ -278,7 +280,6 @@
     el.btnRepo.addEventListener("click", openRepo);
     el.btnCloseAbout.addEventListener("click", () => App().Hide());
 
-    window.runtime.EventsOn("mugcup:status", setStatus);
     window.runtime.EventsOn("mugcup:config", setConfig);
     window.runtime.EventsOn("mugcup:view", showView);
   }
@@ -286,19 +287,13 @@
   async function init() {
     wireEvents();
     try {
-      const [cfg, st, view] = await Promise.all([App().GetConfig(), App().GetStatus(), App().CurrentView()]);
+      const [cfg, view] = await Promise.all([App().GetConfig(), App().CurrentView()]);
       setConfig(cfg);
-      setStatus(st);
       showView(view);
     } catch (err) {
       showError(String(err));
     }
-    tickTimer = setInterval(renderStatus, 1000);
   }
-
-  window.addEventListener("beforeunload", () => {
-    if (tickTimer) clearInterval(tickTimer);
-  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

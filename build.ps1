@@ -77,11 +77,29 @@ try {
         # ---- CLI build (src-cli) ----
         Push-Location $cliSourceRoot
         try {
-            # Go's default subsystem on Windows is console.
-            $cliOutputPath = Join-Path $outputDir "mugcup-cli.exe"
-            go build -o $cliOutputPath .
-            if ($LASTEXITCODE -ne 0) {
-                throw "$architecture CLI build failed."
+            # Same 64-bit-only rsrc.syso limitation as the GUI build above.
+            $cliResourcePath = Join-Path $cliSourceRoot "rsrc.syso"
+            $cliHiddenResourcePath = "$cliResourcePath.build-disabled"
+            $cliResourceHidden = $false
+            if ($architecture -eq "x86" -and (Test-Path -LiteralPath $cliResourcePath)) {
+                if (Test-Path -LiteralPath $cliHiddenResourcePath) {
+                    throw "Temporary resource file already exists: $cliHiddenResourcePath"
+                }
+                Move-Item -LiteralPath $cliResourcePath -Destination $cliHiddenResourcePath
+                $cliResourceHidden = $true
+            }
+
+            try {
+                # Go's default subsystem on Windows is console.
+                $cliOutputPath = Join-Path $outputDir "mugcup-cli.exe"
+                go build -o $cliOutputPath .
+                if ($LASTEXITCODE -ne 0) {
+                    throw "$architecture CLI build failed."
+                }
+            } finally {
+                if ($cliResourceHidden) {
+                    Move-Item -LiteralPath $cliHiddenResourcePath -Destination $cliResourcePath
+                }
             }
         } finally {
             Pop-Location
