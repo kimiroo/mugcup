@@ -9,8 +9,16 @@ import (
 )
 
 type options struct {
-	displayOn *bool
-	output    string // "text" (default) or "json"
+	displayOn  *bool
+	autoStart  *bool
+	autoUpdate *bool
+	output     string // "text" (default) or "json"
+}
+
+// hasSetting reports whether any settings-only option was given, for
+// validating the standalone "set" command has something to do.
+func (o options) hasSetting() bool {
+	return o.displayOn != nil || o.autoStart != nil || o.autoUpdate != nil
 }
 
 func printHelp() {
@@ -21,10 +29,12 @@ Usage:
 
 Commands:
   launch                  Start mugcup (no-op success if already running)
-  start [time]             Keep on for the given duration (e.g. 30m, 1h, 2h15m). No arg cycles presets
+  start <time>             Keep on for the given duration (e.g. 30m, 1h, 2h15m). Required — no default
   start infinite           Keep on indefinitely
   start preset <n>         Start the n-th preset from the configured list (0-based)
   stop                     Turn off the timer and keep-on
+  set                      Change settings that aren't tied to a running timer (see Options below).
+                            Requires at least one of -d, --auto-start, --auto-update
   config                   Show the current config
   settings                 Open the settings window
   status                   Show the current status
@@ -34,8 +44,11 @@ Commands:
   help                     Show this help
 
 Options:
-  -d, --display-on <true|false>   Explicitly set whether to also keep the display on (omit to keep the current setting)
-  -o, --output <text|json>        Output format. start/stop/status/config/export/import
+  -d, --display-on <true|false>   Also keep the display on. Persists; unlike the others, only has an
+                                   on-screen effect while a timer is running (omit to keep the current setting)
+  --auto-start <true|false>       Start mugcup automatically with Windows
+  --auto-update <true|false>      Automatically check for updates
+  -o, --output <text|json>        Output format. start/stop/set/status/config/export/import
                                    print the result as multiple lines (text) or just that value (json)
 
 Examples:
@@ -43,6 +56,7 @@ Examples:
   mugcup-cli start 1h30m
   mugcup-cli start preset 0
   mugcup-cli start infinite -d true
+  mugcup-cli set --auto-start true --auto-update false
   mugcup-cli status -o json
   mugcup-cli export config.json
   mugcup-cli exit
@@ -65,6 +79,26 @@ func parseOptions(args []string) (options, []string, error) {
 				return opts, nil, fmt.Errorf("invalid value for %s: %s", a, args[i])
 			}
 			opts.displayOn = &v
+		case "--auto-start":
+			if i+1 >= len(args) {
+				return opts, nil, fmt.Errorf("%s requires a true/false value", a)
+			}
+			i++
+			v, err := parseBool(args[i])
+			if err != nil {
+				return opts, nil, fmt.Errorf("invalid value for %s: %s", a, args[i])
+			}
+			opts.autoStart = &v
+		case "--auto-update":
+			if i+1 >= len(args) {
+				return opts, nil, fmt.Errorf("%s requires a true/false value", a)
+			}
+			i++
+			v, err := parseBool(args[i])
+			if err != nil {
+				return opts, nil, fmt.Errorf("invalid value for %s: %s", a, args[i])
+			}
+			opts.autoUpdate = &v
 		case "-o", "--output":
 			if i+1 >= len(args) {
 				return opts, nil, fmt.Errorf("%s requires a text/json value", a)
@@ -173,35 +207,48 @@ func main() {
 		printResult(opts, runExit(opts))
 
 	case "start":
-		resp, ok := sendToRunningInstance(Request{Command: "start", Args: positional, DisplayOn: opts.displayOn})
+		if len(positional) == 0 {
+			fail("start requires an argument: a duration (e.g. 30m, 1h30m), 'infinite', or 'preset <n>'.\nRun 'mugcup-cli help' for usage.")
+		}
+		resp, ok := sendToRunningInstance(Request{Command: "start", Args: positional, DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 		if !ok {
 			fail(notRunningMsg)
 		}
 		printResult(opts, resp)
 
 	case "stop":
-		resp, ok := sendToRunningInstance(Request{Command: "stop", DisplayOn: opts.displayOn})
+		resp, ok := sendToRunningInstance(Request{Command: "stop", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
+		if !ok {
+			fail(notRunningMsg)
+		}
+		printResult(opts, resp)
+
+	case "set":
+		if !opts.hasSetting() {
+			fail("set requires at least one of: -d/--display-on, --auto-start, --auto-update.\nRun 'mugcup-cli help' for usage.")
+		}
+		resp, ok := sendToRunningInstance(Request{Command: "set", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 		if !ok {
 			fail(notRunningMsg)
 		}
 		printResult(opts, resp)
 
 	case "status":
-		resp, ok := sendToRunningInstance(Request{Command: "status", DisplayOn: opts.displayOn})
+		resp, ok := sendToRunningInstance(Request{Command: "status", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 		if !ok {
 			fail(notRunningMsg)
 		}
 		printResult(opts, resp)
 
 	case "config":
-		resp, ok := sendToRunningInstance(Request{Command: "config", DisplayOn: opts.displayOn})
+		resp, ok := sendToRunningInstance(Request{Command: "config", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 		if !ok {
 			fail(notRunningMsg)
 		}
 		printResult(opts, resp)
 
 	case "settings":
-		resp, ok := sendToRunningInstance(Request{Command: "settings", DisplayOn: opts.displayOn})
+		resp, ok := sendToRunningInstance(Request{Command: "settings", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 		if !ok {
 			fail(notRunningMsg)
 		}
@@ -219,7 +266,7 @@ func main() {
 }
 
 func runExport(opts options, positional []string) {
-	resp, ok := sendToRunningInstance(Request{Command: "export", DisplayOn: opts.displayOn})
+	resp, ok := sendToRunningInstance(Request{Command: "export", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 	if !ok {
 		fail(notRunningMsg)
 	}
@@ -253,7 +300,7 @@ func runImport(opts options, positional []string) {
 		fail("failed to read the config file: %s", err.Error())
 	}
 
-	resp, ok := sendToRunningInstance(Request{Command: "import", ConfigJSON: string(raw), DisplayOn: opts.displayOn})
+	resp, ok := sendToRunningInstance(Request{Command: "import", ConfigJSON: string(raw), DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 	if !ok {
 		fail(notRunningMsg)
 	}

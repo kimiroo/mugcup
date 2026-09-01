@@ -33,7 +33,7 @@ func guiExecutablePath() (string, error) {
 // IPC server actually responds before returning.
 func runLaunch(opts options) Response {
 	if isRunning() {
-		return applyDisplayOnOnly(opts, Response{Success: true, Message: "mugcup is already running."})
+		return applySettingsOnly(opts, Response{Success: true, Message: "mugcup is already running."})
 	}
 
 	guiPath, err := guiExecutablePath()
@@ -52,16 +52,16 @@ func runLaunch(opts options) Response {
 		return Response{Success: false, Message: "could not confirm mugcup started (timed out)."}
 	}
 
-	return applyDisplayOnOnly(opts, Response{Success: true, Message: "Started mugcup."})
+	return applySettingsOnly(opts, Response{Success: true, Message: "Started mugcup."})
 }
 
-// applyDisplayOnOnly makes one more IPC call after launch when -d was given,
-// so "launch with a display-on preference" works in one command.
-func applyDisplayOnOnly(opts options, fallback Response) Response {
-	if opts.displayOn == nil {
+// applySettingsOnly makes one more IPC call after launch when -d, --auto-start,
+// or --auto-update was given, so "launch with these settings" works in one command.
+func applySettingsOnly(opts options, fallback Response) Response {
+	if !opts.hasSetting() {
 		return fallback
 	}
-	resp, ok := sendToRunningInstance(Request{Command: "config", DisplayOn: opts.displayOn})
+	resp, ok := sendToRunningInstance(Request{Command: "set", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 	if !ok {
 		return fallback
 	}
@@ -71,7 +71,7 @@ func applyDisplayOnOnly(opts options, fallback Response) Response {
 // runExit asks the running mugcup.exe to quit and waits until the process is
 // actually gone.
 func runExit(opts options) Response {
-	resp, ok := sendToRunningInstance(Request{Command: "exit", DisplayOn: opts.displayOn})
+	resp, ok := sendToRunningInstance(Request{Command: "exit", DisplayOn: opts.displayOn, AutoStart: opts.autoStart, AutoUpdate: opts.autoUpdate})
 	if !ok {
 		return Response{Success: false, Message: "mugcup is not currently running."}
 	}

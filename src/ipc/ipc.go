@@ -14,8 +14,14 @@ import (
 type Request struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
-	// DisplayOn is tri-state: nil=unset (keep config), non-nil=apply and persist immediately.
-	DisplayOn *bool `json:"displayOn,omitempty"`
+	// DisplayOn, AutoStart, and AutoUpdate are tri-state: nil=unset (keep
+	// config), non-nil=apply and persist immediately. They're accepted
+	// alongside any command (so e.g. "start 30m -d true" both starts a timer
+	// and updates the display setting), and are also what the standalone
+	// "set" command uses to change settings that no other command touches.
+	DisplayOn  *bool `json:"displayOn,omitempty"`
+	AutoStart  *bool `json:"autoStart,omitempty"`
+	AutoUpdate *bool `json:"autoUpdate,omitempty"`
 	// ConfigJSON carries the full config to apply for the "import" command.
 	ConfigJSON string `json:"configJson,omitempty"`
 }

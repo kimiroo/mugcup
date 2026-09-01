@@ -132,14 +132,29 @@ func runOnMainThreadVoid(app *walk.Application, fn func()) {
 }
 
 func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.Request) ipc.Response {
-	// -d/--display-on is a global option applied before dispatching to the
-	// actual command, regardless of which command it is.
-	if req.DisplayOn != nil {
+	// -d/--display-on, --auto-start, and --auto-update are global options
+	// applied before dispatching to the actual command, regardless of which
+	// command it is (and are the only thing the standalone "set" command
+	// does). They persist independently of an active timer, unlike -d's
+	// on-screen effect which only actually applies while a timer is running.
+	if req.DisplayOn != nil || req.AutoStart != nil || req.AutoUpdate != nil {
 		cfg := ctrl.Config()
-		if cfg.KeepDisplayOn != *req.DisplayOn {
+		changed := false
+		if req.DisplayOn != nil && cfg.KeepDisplayOn != *req.DisplayOn {
 			cfg.KeepDisplayOn = *req.DisplayOn
+			changed = true
+		}
+		if req.AutoStart != nil && cfg.AutoStart != *req.AutoStart {
+			cfg.AutoStart = *req.AutoStart
+			changed = true
+		}
+		if req.AutoUpdate != nil && cfg.AutoUpdate != *req.AutoUpdate {
+			cfg.AutoUpdate = *req.AutoUpdate
+			changed = true
+		}
+		if changed {
 			if err := ctrl.UpdateConfig(cfg); err != nil {
-				return ipc.Response{Success: false, Message: "failed to change the keep-display-on setting: " + err.Error()}
+				return ipc.Response{Success: false, Message: "failed to update settings: " + err.Error()}
 			}
 		}
 	}
@@ -152,6 +167,9 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 	case "stop":
 		ctrl.TurnOff()
 		return ipc.Response{Success: true, Message: "Timer turned off.", Status: statusPayload(ctrl)}
+
+	case "set":
+		return ipc.Response{Success: true, Message: "Updated settings.", Config: configPayload(ctrl)}
 
 	case "status":
 		return ipc.Response{
@@ -187,8 +205,7 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 
 func handleStart(ctrl *settings.Controller, args []string) ipc.Response {
 	if len(args) == 0 {
-		ctrl.Cycle()
-		return ipc.Response{Success: true, Message: fmt.Sprintf("Timer started (%s)", ctrl.State().RemainingLabel()), Status: statusPayload(ctrl)}
+		return ipc.Response{Success: false, Message: "start requires an argument: a duration (e.g. 30m, 1h30m), 'infinite', or 'preset <n>'."}
 	}
 
 	switch strings.ToLower(args[0]) {

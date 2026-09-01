@@ -21,6 +21,8 @@ type Request struct {
 	Command    string   `json:"command"`
 	Args       []string `json:"args"`
 	DisplayOn  *bool    `json:"displayOn,omitempty"`
+	AutoStart  *bool    `json:"autoStart,omitempty"`
+	AutoUpdate *bool    `json:"autoUpdate,omitempty"`
 	ConfigJSON string   `json:"configJson,omitempty"`
 }
 
