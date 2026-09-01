@@ -27,10 +27,29 @@ func init() {
 	runtime.LockOSThread()
 }
 
+func init() {
+	// manifest.xml (embedded as rsrc.syso) predates WebView2 and doesn't
+	// declare DPI awareness, so Windows would otherwise DPI-virtualize this
+	// process's windows while WebView2 renders its content at the real DPI
+	// internally — the two drift apart at any scale other than 100%, and
+	// fixed window sizes stop matching their content. Declaring Per-Monitor-v2
+	// awareness here (before any window exists) avoids needing to touch the
+	// prebuilt rsrc.syso.
+	if procSetProcessDpiAwarenessContext.Find() == nil {
+		procSetProcessDpiAwarenessContext.Call(dpiAwarenessContextPerMonitorAwareV2)
+	}
+}
+
 var (
-	user32          = syscall.NewLazyDLL("user32.dll")
-	procMessageBoxW = user32.NewProc("MessageBoxW")
+	user32                            = syscall.NewLazyDLL("user32.dll")
+	procMessageBoxW                   = user32.NewProc("MessageBoxW")
+	procSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
 )
+
+// dpiAwarenessContextPerMonitorAwareV2 is DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+// a pseudo-handle Windows defines as -4 (see winuser.h) rather than a real
+// value, hence the bit trick to get -4 into a uintptr.
+const dpiAwarenessContextPerMonitorAwareV2 = ^uintptr(3)
 
 // stopIPCServer shuts down the single-instance IPC listener. It's set once
 // StartServer succeeds and called early by applyUpdateAndRestart (before
@@ -250,12 +269,12 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 
 func handleStart(ctrl *settings.Controller, args []string) ipc.Response {
 	if len(args) == 0 {
-		return ipc.Response{Success: false, Message: "start requires an argument: a duration (e.g. 30m, 1h30m), 'infinite', or 'preset <n>'."}
+		return ipc.Response{Success: false, Message: "start requires an argument: a duration (e.g. 30m, 1h30m), 'indefinite', or 'preset <n>'."}
 	}
 
 	switch strings.ToLower(args[0]) {
-	case "infinite", "inf", "0":
-		ctrl.SetInfinite()
+	case "indefinite", "indef", "0":
+		ctrl.SetIndefinite()
 		return ipc.Response{Success: true, Message: "Indefinite keep-on activated.", Status: statusPayload(ctrl)}
 
 	case "preset":
@@ -302,14 +321,14 @@ func handleImport(ctrl *settings.Controller, raw string) ipc.Response {
 func statusPayload(ctrl *settings.Controller) *ipc.StatusPayload {
 	st := ctrl.State()
 	remainingSec := 0
-	if st.Active && !st.Infinite {
+	if st.Active && !st.Indefinite {
 		if remaining := int(time.Until(st.ExpiresAt).Seconds()); remaining > 0 {
 			remainingSec = remaining
 		}
 	}
 	return &ipc.StatusPayload{
 		Active:         st.Active,
-		Infinite:       st.Infinite,
+		Indefinite:     st.Indefinite,
 		Mode:           string(st.Mode),
 		RemainingSec:   remainingSec,
 		RemainingLabel: st.RemainingLabel(),

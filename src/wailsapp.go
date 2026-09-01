@@ -8,7 +8,9 @@ import (
 	"log"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"mugcup/ipc"
 	"mugcup/settings"
@@ -37,16 +39,22 @@ const (
 	viewAbout    windowView = "about"
 )
 
+// viewSpec's width is fixed (DisableResize means the user can't touch it
+// anyway), but height ranges between minHeight and maxHeight: the frontend
+// measures its own actual content height on every change (tab switches,
+// toggled fields, a growing preset list) and asks ResizeToContent to match
+// it, so the window's padding stays visually even instead of a static guess
+// leaving leftover space pooling at the bottom.
 type viewSpec struct {
-	title               string
-	width, height       int
-	minWidth, minHeight int
+	title                string
+	width                int
+	minHeight, maxHeight int
 }
 
 var viewSpecs = map[windowView]viewSpec{
-	viewSettings: {"mugcup — Settings", 440, 760, 380, 480},
-	viewCustom:   {"mugcup — Custom", 400, 420, 400, 420},
-	viewAbout:    {"mugcup — About", 360, 300, 360, 300},
+	viewSettings: {"Settings", 440, 300, 850},
+	viewCustom:   {"Custom", 400, 300, 460},
+	viewAbout:    {"About", 360, 300, 400},
 }
 
 // App is the Wails-bound backend for the popup window. Every method here is
@@ -115,15 +123,18 @@ func (a *App) open(view windowView) {
 	go a.run(view)
 }
 
-// applyView pushes the window chrome (title, size) and tells the already-
-// loaded frontend which view to render, for switching views in a window
-// that's already open. The very first open sizes itself from viewSpecs
-// directly in run(), before the window exists.
+// applyView pushes the window chrome (title, size bounds) and tells the
+// already-loaded frontend which view to render, for switching views in a
+// window that's already open. The very first open sizes itself from
+// viewSpecs directly in run(), before the window exists. The actual height
+// starts at minHeight as a placeholder; the frontend corrects it via
+// ResizeToContent within a frame of the view becoming visible.
 func (a *App) applyView(ctx context.Context, view windowView) {
 	spec := viewSpecs[view]
 	wailsruntime.WindowSetTitle(ctx, spec.title)
-	wailsruntime.WindowSetMinSize(ctx, spec.minWidth, spec.minHeight)
-	wailsruntime.WindowSetSize(ctx, spec.width, spec.height)
+	wailsruntime.WindowSetMinSize(ctx, spec.width, spec.minHeight)
+	wailsruntime.WindowSetMaxSize(ctx, spec.width, spec.maxHeight)
+	wailsruntime.WindowSetSize(ctx, spec.width, spec.minHeight)
 	wailsruntime.WindowCenter(ctx)
 	wailsruntime.EventsEmit(ctx, "mugcup:view", string(view))
 }
@@ -161,9 +172,12 @@ func (a *App) run(view windowView) {
 	err = wails.Run(&options.App{
 		Title:            spec.title,
 		Width:            spec.width,
-		Height:           spec.height,
-		MinWidth:         spec.minWidth,
+		Height:           spec.minHeight,
+		MinWidth:         spec.width,
 		MinHeight:        spec.minHeight,
+		MaxWidth:         spec.width,
+		MaxHeight:        spec.maxHeight,
+		DisableResize:    true,
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
 		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        a.startup,
@@ -216,6 +230,17 @@ func (a *App) beforeClose(ctx context.Context) bool {
 
 func (a *App) GetConfig() *ipc.ConfigPayload { return configPayload(a.ctrl) }
 
+// ShowError shows message in a native, modal message box. The popup window
+// is small and every other alert in the app (update prompts, warnings)
+// already uses one — an inline banner at the bottom of the content was easy
+// to miss entirely (e.g. a duplicate-preset or save error), so validation
+// and settings errors from the frontend go through here too.
+func (a *App) ShowError(message string) {
+	title, _ := syscall.UTF16PtrFromString("mugcup")
+	text, _ := syscall.UTF16PtrFromString(message)
+	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), uintptr(mbOK|mbIconWarning|mbSetForeground))
+}
+
 // Version returns the build-time version string (e.g. "1.2.3" or "dev").
 // Exposed as a bound method so the About view can display it without an
 // additional IPC round-trip.
@@ -228,6 +253,30 @@ func (a *App) CurrentView() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return string(a.view)
+}
+
+// windowChromeHeight is this window style's native title bar + bottom
+// border thickness, measured empirically (GetWindowRect vs GetClientRect)
+// at 100% display scale. WindowSetSize scales whatever height we pass it by
+// the window's current per-monitor DPI, so folding this constant in keeps
+// content-to-window sizing consistent at other scales too.
+const windowChromeHeight = 39
+
+// ResizeToContent resizes the popup window's height to fit contentHeight,
+// the frontend's own measurement of its actual rendered content (see
+// measureContentHeight in app.js), clamped to the current view's
+// min/maxHeight via the WindowSetMinSize/WindowSetMaxSize calls in
+// applyView. Width never changes — only height varies content-to-content.
+func (a *App) ResizeToContent(contentHeight int) {
+	a.mu.Lock()
+	ctx := a.ctx
+	view := a.view
+	a.mu.Unlock()
+	if ctx == nil {
+		return
+	}
+	spec := viewSpecs[view]
+	wailsruntime.WindowSetSize(ctx, spec.width, contentHeight+windowChromeHeight)
 }
 
 // OpenRepo opens the project's GitHub page in the system's default browser.

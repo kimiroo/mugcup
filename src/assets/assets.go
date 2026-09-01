@@ -11,8 +11,8 @@ var IconDisabledICO []byte
 //go:embed clock.ico
 var IconClockICO []byte
 
-//go:embed infinite.ico
-var IconInfiniteICO []byte
+//go:embed indefinite.ico
+var IconIndefiniteICO []byte
 
 //go:embed schedule.ico
 var IconScheduleICO []byte

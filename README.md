@@ -27,7 +27,7 @@ won't start the GUI for you).
 ```powershell
 .\mugcup-cli.exe launch                 # start mugcup (no-op success if already running)
 .\mugcup-cli.exe start 1h30m
-.\mugcup-cli.exe start infinite
+.\mugcup-cli.exe start indefinite
 .\mugcup-cli.exe start preset 0         # pick a preset by index from the configured list
 .\mugcup-cli.exe stop
 .\mugcup-cli.exe config                 # show the current config

@@ -38,7 +38,7 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 	updateTrayIcon(state)
 	updateTooltip(state)
 
-	mInfinite := systray.AddMenuItemCheckbox("Indefinitely", "Keep the system awake indefinitely", state.Active && state.Infinite)
+	mIndefinite := systray.AddMenuItemCheckbox("Indefinite", "Keep the system awake indefinitely", state.Active && state.Indefinite)
 	mPresets := systray.AddMenuItemCheckbox("Preset", "Choose a preset duration", state.PresetActive)
 
 	type presetItem struct {
@@ -109,8 +109,8 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 		} else {
 			systray.SetOnTapped(func() {
 				c := ctrl.Config()
-				if c.TrayClickAction == settings.ActionInfinite {
-					ctrl.ToggleInfinite()
+				if c.TrayClickAction == settings.ActionIndefinite {
+					ctrl.ToggleIndefinite()
 				} else {
 					ctrl.Cycle()
 				}
@@ -137,10 +137,10 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 		} else {
 			mOff.Check()
 		}
-		if s.Active && s.Infinite {
-			mInfinite.Check()
+		if s.Active && s.Indefinite {
+			mIndefinite.Check()
 		} else {
-			mInfinite.Uncheck()
+			mIndefinite.Uncheck()
 		}
 		updatePresetChecks(s)
 	})
@@ -160,8 +160,8 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 			select {
 			case <-mKeepDisplay.ClickedCh:
 				_ = ctrl.ToggleKeepDisplayOn()
-			case <-mInfinite.ClickedCh:
-				ctrl.ToggleInfinite()
+			case <-mIndefinite.ClickedCh:
+				ctrl.ToggleIndefinite()
 			case <-mOff.ClickedCh:
 				ctrl.TurnOff()
 			case <-mCustom.ClickedCh:
@@ -193,8 +193,8 @@ func updateTooltip(s settings.State) {
 
 func updateTrayIcon(s settings.State) {
 	switch s.Mode {
-	case settings.ModeInfinite:
-		systray.SetIcon(assets.IconInfiniteICO)
+	case settings.ModeIndefinite:
+		systray.SetIcon(assets.IconIndefiniteICO)
 	case settings.ModeTimer:
 		systray.SetIcon(assets.IconClockICO)
 	case settings.ModeSchedule:

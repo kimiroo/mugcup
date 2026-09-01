@@ -30,8 +30,8 @@ type Request struct {
 
 type StatusPayload struct {
 	Active         bool   `json:"active"`
-	Infinite       bool   `json:"infinite"`
-	Mode           string `json:"mode"` // "off", "infinite", "timer", or "schedule" — see settings.Mode
+	Indefinite     bool   `json:"indefinite"`
+	Mode           string `json:"mode"` // "off", "indefinite", "timer", or "schedule" — see settings.Mode
 	RemainingSec   int    `json:"remainingSec"`
 	RemainingLabel string `json:"remainingLabel"`
 	KeepDisplayOn  bool   `json:"keepDisplayOn"`

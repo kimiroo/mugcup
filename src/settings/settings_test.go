@@ -10,8 +10,8 @@ func TestFormatDurationSec(t *testing.T) {
 		sec      int
 		expected string
 	}{
-		{0, "Unlimited"},
-		{-1, "Unlimited"},
+		{0, "Indefinite"},
+		{-1, "Indefinite"},
 		{900, "15m"},
 		{1800, "30m"},
 		{3600, "1h"},
@@ -35,42 +35,42 @@ func TestControllerStateAndPresets(t *testing.T) {
 		t.Errorf("Expected initial state inactive, got active")
 	}
 
-	ctrl.SetInfinite()
+	ctrl.SetIndefinite()
 	st := ctrl.State()
-	if !st.Active || !st.Infinite {
-		t.Errorf("Expected Active=true, Infinite=true, got %+v", st)
+	if !st.Active || !st.Indefinite {
+		t.Errorf("Expected Active=true, Indefinite=true, got %+v", st)
 	}
 
 	ctrl.SetPreset(15 * 60)
 	st = ctrl.State()
-	if !st.Active || st.Infinite {
-		t.Errorf("Expected Active=true, Infinite=false after preset, got %+v", st)
+	if !st.Active || st.Indefinite {
+		t.Errorf("Expected Active=true, Indefinite=false after preset, got %+v", st)
 	}
 
-	ctrl.ToggleInfinite()
+	ctrl.ToggleIndefinite()
 	st = ctrl.State()
-	if !st.Active || !st.Infinite {
-		t.Errorf("Expected Active=true, Infinite=true after ToggleInfinite, got %+v", st)
+	if !st.Active || !st.Indefinite {
+		t.Errorf("Expected Active=true, Indefinite=true after ToggleIndefinite, got %+v", st)
 	}
 
-	ctrl.ToggleInfinite()
+	ctrl.ToggleIndefinite()
 	st = ctrl.State()
 	if st.Active {
-		t.Errorf("Expected Active=false after ToggleInfinite on active infinite, got %+v", st)
+		t.Errorf("Expected Active=false after ToggleIndefinite on active indefinite, got %+v", st)
 	}
 }
 
 func TestControllerMode(t *testing.T) {
-	cfg := DefaultConfig() // TimerList: 15m, 30m, 1h, 2h, Unlimited
+	cfg := DefaultConfig() // TimerList: 15m, 30m, 1h, 2h, Indefinite
 	ctrl := NewController(cfg)
 
 	if got := ctrl.State().Mode; got != ModeOff {
 		t.Errorf("Expected initial Mode=%q, got %q", ModeOff, got)
 	}
 
-	ctrl.SetInfinite()
-	if got := ctrl.State().Mode; got != ModeInfinite {
-		t.Errorf("SetInfinite: expected Mode=%q, got %q", ModeInfinite, got)
+	ctrl.SetIndefinite()
+	if got := ctrl.State().Mode; got != ModeIndefinite {
+		t.Errorf("SetIndefinite: expected Mode=%q, got %q", ModeIndefinite, got)
 	}
 
 	ctrl.SetPreset(15 * 60)
@@ -79,8 +79,8 @@ func TestControllerMode(t *testing.T) {
 	}
 
 	ctrl.SetPreset(0)
-	if got := ctrl.State().Mode; got != ModeInfinite {
-		t.Errorf("SetPreset(unlimited): expected Mode=%q, got %q", ModeInfinite, got)
+	if got := ctrl.State().Mode; got != ModeIndefinite {
+		t.Errorf("SetPreset(indefinite): expected Mode=%q, got %q", ModeIndefinite, got)
 	}
 
 	if err := ctrl.SetCustomDuration(10 * time.Minute); err != nil {

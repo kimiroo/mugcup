@@ -8,16 +8,15 @@
 <body>
   <div class="app">
     <header class="head">
-      <div class="head-title">mugcup</div>
+      <div class="head-title">mugcup ☕️</div>
     </header>
 
     <section class="view" id="view-settings" hidden>
       <section class="card">
         <h2>Presets</h2>
-        <p class="hint">Edits here change what shows up in the tray's "Timer presets" menu — starting one happens from the tray, not here.</p>
         <ul class="preset-list" id="presetList"></ul>
         <div class="preset-add">
-          <input type="number" id="presetMinutes" min="0" placeholder="Minutes (0 = unlimited)">
+          <input type="text" id="presetMinutes" placeholder="e.g. 1h30m, 45m, or 0 for indefinite">
           <button class="btn" id="btnAddPreset">+ Add</button>
         </div>
       </section>
@@ -25,7 +24,7 @@
       <section class="card">
         <h2>General</h2>
         <label class="switch-row">
-          <span>Also keep the display on</span>
+          <span>Keep display on</span>
           <span class="switch"><input type="checkbox" id="chkDisplayOn"><span class="track"><span class="thumb"></span></span></span>
         </label>
         <label class="switch-row">
@@ -36,7 +35,7 @@
           <span>Automatically check for updates</span>
           <span class="switch"><input type="checkbox" id="chkAutoUpdateCheck"><span class="track"><span class="thumb"></span></span></span>
         </label>
-        <label class="switch-row">
+        <label class="switch-row switch-row--nested">
           <span>Automatically install updates</span>
           <span class="switch"><input type="checkbox" id="chkAutoUpdateApply"><span class="track"><span class="thumb"></span></span></span>
         </label>
@@ -44,7 +43,7 @@
           <span>Tray click action</span>
           <select id="trayClickAction">
             <option value="cycle">Cycle through presets</option>
-            <option value="infinite">Keep on indefinitely</option>
+            <option value="indefinite">Indefinite</option>
             <option value="menu">Open tray menu</option>
           </select>
         </label>
@@ -67,9 +66,9 @@
         </div>
 
         <div class="mode-pane" id="paneUntil" hidden>
-          <label class="switch-row">
-            <span>With date</span>
+          <label class="date-toggle">
             <span class="switch"><input type="checkbox" id="chkWithDate"><span class="track"><span class="thumb"></span></span></span>
+            <span>Choose a specific date</span>
           </label>
           <div class="duration-row">
             <input type="time" id="untilTime" step="1">
@@ -99,8 +98,6 @@
         <button class="btn btn-accent" id="btnCloseAbout">Close</button>
       </div>
     </section>
-
-    <div class="error" id="errorLabel" hidden></div>
   </div>
   <script src="app.js"></script>
 </body>

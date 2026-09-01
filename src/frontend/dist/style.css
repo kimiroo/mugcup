@@ -60,7 +60,7 @@ html, body {
 }
 
 .head-title {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.2px;
 }
@@ -241,7 +241,6 @@ select:focus-visible,
 .preset-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 7px 10px;
   border-radius: 6px;
   border: 1px solid transparent;
@@ -252,7 +251,31 @@ select:focus-visible,
   border-color: var(--control-border);
 }
 
+.preset-item.dragging {
+  opacity: 0.5;
+}
+
+/* Shown on the item the dragged preset would land before/after, so the
+   drop target is obvious without live-reordering the list on every
+   dragover (which would make the list jump under the cursor). */
+.preset-item.drop-before {
+  border-top-color: var(--accent);
+}
+
+.preset-item.drop-after {
+  border-bottom-color: var(--accent);
+}
+
+.preset-grip {
+  flex: none;
+  padding-right: 6px;
+  color: var(--text-secondary);
+  cursor: grab;
+  user-select: none;
+}
+
 .preset-item .preset-label {
+  flex: 1 1 auto;
   font-weight: 500;
 }
 
@@ -272,16 +295,6 @@ select:focus-visible,
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 4px;
-}
-
-.preset-move:disabled {
-  color: var(--control-border);
-  cursor: default;
-}
-
-.preset-move:not(:disabled):hover {
-  background: var(--control-hover);
-  color: var(--text);
 }
 
 .preset-actions .preset-remove {
@@ -311,6 +324,38 @@ select:focus-visible,
 .switch-row:last-child,
 .select-row:last-child {
   border-bottom: none;
+}
+
+/* Indented to read as a sub-option of the row above it (e.g. "install
+   updates" only makes sense once "check for updates" is on). */
+.switch-row--nested {
+  padding-left: 16px;
+}
+
+.switch-row:has(input:disabled) {
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+.switch input:disabled {
+  cursor: not-allowed;
+}
+
+.switch input:disabled + .track {
+  opacity: 0.5;
+}
+
+/* Unlike .switch-row (a divider-separated row in a settings list), this
+   pairs the switch directly with its own label — switch first, so it reads
+   as "toggle this" rather than a floating label next to an unrelated
+   control — and sits closer to the field it governs than to the tabs above. */
+.date-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 10px;
+  cursor: pointer;
+  font-weight: 500;
 }
 
 .select-row select {
@@ -361,16 +406,6 @@ select:focus-visible,
 
 .switch input:checked + .track .thumb {
   transform: translateX(18px);
-}
-
-.error {
-  color: var(--error);
-  font-size: 13px;
-  padding: 0 2px;
-}
-
-.error[hidden] {
-  display: none;
 }
 
 ::-webkit-scrollbar {

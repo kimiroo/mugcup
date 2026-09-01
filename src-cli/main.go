@@ -42,7 +42,7 @@ Usage:
 Commands:
   launch                  Start mugcup (no-op success if already running)
   start <time>             Keep on for the given duration (e.g. 30m, 1h, 2h15m). Required — no default
-  start infinite           Keep on indefinitely
+  start indefinite         Keep on indefinitely
   start preset <n>         Start the n-th preset from the configured list (0-based)
   stop                     Turn off the timer and keep-on
   set                      Change settings that aren't tied to a running timer (see Options below).
@@ -69,7 +69,7 @@ Examples:
   mugcup-cli launch
   mugcup-cli start 1h30m
   mugcup-cli start preset 0
-  mugcup-cli start infinite -d true
+  mugcup-cli start indefinite -d true
   mugcup-cli set --auto-start true --auto-update-apply false
   mugcup-cli status -o json
   mugcup-cli export config.json
@@ -232,7 +232,7 @@ func main() {
 
 	case "start":
 		if len(positional) == 0 {
-			fail("start requires an argument: a duration (e.g. 30m, 1h30m), 'infinite', or 'preset <n>'.\nRun 'mugcup-cli help' for usage.")
+			fail("start requires an argument: a duration (e.g. 30m, 1h30m), 'indefinite', or 'preset <n>'.\nRun 'mugcup-cli help' for usage.")
 		}
 		req := opts.asRequest()
 		req.Command = "start"

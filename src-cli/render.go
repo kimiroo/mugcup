@@ -14,11 +14,11 @@ func formatYesNo(b bool) string {
 
 // formatRemaining renders seconds as "9m 54s"; unlike settings.RemainingLabel
 // on the GUI side, this includes seconds.
-func formatRemaining(active, infinite bool, sec int) string {
+func formatRemaining(active, indefinite bool, sec int) string {
 	if !active {
 		return "Off"
 	}
-	if infinite {
+	if indefinite {
 		return "Indefinite"
 	}
 	if sec < 0 {
@@ -33,10 +33,10 @@ func formatRemaining(active, infinite bool, sec int) string {
 	return fmt.Sprintf("%dm %ds", m, s)
 }
 
-// formatPresetSec renders a config preset (seconds) as "15m", "1h 30m", "Unlimited".
+// formatPresetSec renders a config preset (seconds) as "15m", "1h 30m", "Indefinite".
 func formatPresetSec(sec int) string {
 	if sec <= 0 {
-		return "Unlimited"
+		return "Indefinite"
 	}
 	h := sec / 3600
 	m := (sec % 3600) / 60
@@ -51,10 +51,10 @@ func formatPresetSec(sec int) string {
 }
 
 var modeLabels = map[string]string{
-	"off":      "Off",
-	"infinite": "Infinite",
-	"timer":    "Timer",
-	"schedule": "Schedule",
+	"off":        "Off",
+	"indefinite": "Indefinite",
+	"timer":      "Timer",
+	"schedule":   "Schedule",
 }
 
 func formatMode(mode string) string {
@@ -65,9 +65,9 @@ func formatMode(mode string) string {
 }
 
 var trayClickActionLabels = map[string]string{
-	"cycle":    "Cycle through presets",
-	"infinite": "Keep on indefinitely",
-	"menu":     "Open tray menu",
+	"cycle":      "Cycle through presets",
+	"indefinite": "Indefinite",
+	"menu":       "Open tray menu",
 }
 
 func formatTrayClickAction(action string) string {
@@ -80,7 +80,7 @@ func formatTrayClickAction(action string) string {
 func renderStatusText(s *StatusPayload) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Mode: %s\n", formatMode(s.Mode))
-	fmt.Fprintf(&b, "Remaining: %s\n", formatRemaining(s.Active, s.Infinite, s.RemainingSec))
+	fmt.Fprintf(&b, "Remaining: %s\n", formatRemaining(s.Active, s.Indefinite, s.RemainingSec))
 	fmt.Fprintf(&b, "Keep display on: %s", formatYesNo(s.KeepDisplayOn))
 	return b.String()
 }

@@ -33,8 +33,6 @@
     btnRepo: document.getElementById("btnRepo"),
     btnCheckUpdate: document.getElementById("btnCheckUpdate"),
     btnCloseAbout: document.getElementById("btnCloseAbout"),
-
-    errorLabel: document.getElementById("errorLabel"),
   };
 
   const views = {
@@ -45,9 +43,37 @@
 
   let config = null; // last known ConfigPayload
 
+  // The window has no fixed content height — Go clamps it between the
+  // current view's min/maxHeight (see viewSpecs in wailsapp.go) but the
+  // exact size is driven from here, since only the DOM knows its own real
+  // height. Measures direct children of .app rather than .app itself (which
+  // is pinned to 100vh) so it reflects the content's natural size, not the
+  // current window size.
+  function measureContentHeight() {
+    const appEl = document.querySelector(".app");
+    const style = getComputedStyle(appEl);
+    const gap = parseFloat(style.rowGap || style.gap) || 0;
+    const visible = Array.from(appEl.children).filter(
+      (c) => !c.hidden && getComputedStyle(c).display !== "none"
+    );
+    const contentHeight = visible.reduce((sum, c) => sum + c.getBoundingClientRect().height, 0);
+    const gaps = gap * Math.max(0, visible.length - 1);
+    const paddingY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+    return Math.ceil(contentHeight + gaps + paddingY);
+  }
+
+  function scheduleResize() {
+    requestAnimationFrame(() => {
+      App().ResizeToContent(measureContentHeight()).catch(() => {});
+    });
+  }
+
+  // Validation/settings errors surface as a native modal message box rather
+  // than an inline banner — the popup is small and the banner sat at the
+  // very bottom, easy to miss entirely (confirmed confusing in practice).
   function showError(message) {
-    el.errorLabel.textContent = message;
-    el.errorLabel.hidden = !message;
+    if (!message) return;
+    App().ShowError(message).catch(() => {});
   }
 
   function showView(name) {
@@ -55,18 +81,23 @@
     Object.entries(views).forEach(([key, node]) => {
       node.hidden = key !== name;
     });
-    showError("");
     if (name === "custom") resetCustomForm();
+    scheduleResize();
   }
 
   function formatPresetSec(sec) {
-    if (sec <= 0) return "Unlimited";
+    if (sec <= 0) return "Indefinite";
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
     if (h > 0 && m > 0) return `${h}h ${m}m`;
     if (h > 0) return `${h}h`;
     return `${m}m`;
   }
+
+  // Index of the preset currently being dragged, while a drag is in
+  // progress; null otherwise. Reordering happens once on drop rather than
+  // live during dragover, so the list doesn't reflow under the cursor.
+  let dragIndex = null;
 
   function renderPresets() {
     el.presetList.innerHTML = "";
@@ -75,12 +106,19 @@
       empty.className = "preset-empty";
       empty.textContent = "No presets yet — add one below.";
       el.presetList.appendChild(empty);
+      scheduleResize();
       return;
     }
-    const last = config.timerList.length - 1;
     config.timerList.forEach((sec, index) => {
       const li = document.createElement("li");
       li.className = "preset-item";
+      li.draggable = true;
+
+      const grip = document.createElement("span");
+      grip.className = "preset-grip";
+      grip.textContent = "⠿";
+      grip.setAttribute("aria-hidden", "true");
+      grip.title = "Drag to reorder";
 
       const label = document.createElement("span");
       label.className = "preset-label";
@@ -89,34 +127,47 @@
       const actions = document.createElement("span");
       actions.className = "preset-actions";
 
-      const up = document.createElement("button");
-      up.className = "preset-move";
-      up.textContent = "▲";
-      up.title = "Move up";
-      up.disabled = index === 0;
-      up.addEventListener("click", () => movePreset(index, -1));
-
-      const down = document.createElement("button");
-      down.className = "preset-move";
-      down.textContent = "▼";
-      down.title = "Move down";
-      down.disabled = index === last;
-      down.addEventListener("click", () => movePreset(index, 1));
-
       const remove = document.createElement("button");
       remove.className = "preset-remove";
       remove.textContent = "✕";
       remove.title = "Remove preset";
       remove.addEventListener("click", () => removePreset(index));
 
-      actions.appendChild(up);
-      actions.appendChild(down);
       actions.appendChild(remove);
 
+      li.appendChild(grip);
       li.appendChild(label);
       li.appendChild(actions);
+
+      li.addEventListener("dragstart", (e) => {
+        dragIndex = index;
+        li.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+      });
+      li.addEventListener("dragend", () => {
+        li.classList.remove("dragging");
+        dragIndex = null;
+      });
+      li.addEventListener("dragover", (e) => {
+        if (dragIndex === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        li.classList.toggle("drop-before", index < dragIndex);
+        li.classList.toggle("drop-after", index > dragIndex);
+      });
+      li.addEventListener("dragleave", () => {
+        li.classList.remove("drop-before", "drop-after");
+      });
+      li.addEventListener("drop", (e) => {
+        e.preventDefault();
+        li.classList.remove("drop-before", "drop-after");
+        if (dragIndex === null || dragIndex === index) return;
+        movePresetTo(dragIndex, index);
+      });
+
       el.presetList.appendChild(li);
     });
+    scheduleResize();
   }
 
   function renderConfig() {
@@ -124,6 +175,10 @@
     el.chkAutoStart.checked = config.autoStart;
     el.chkAutoUpdateCheck.checked = config.autoUpdateCheck;
     el.chkAutoUpdateApply.checked = config.autoUpdateApply;
+    // Auto-installing only ever runs behind an auto-check (see
+    // maybeAutoCheckUpdate in updateflow.go), so offering it while checking
+    // is off is a contradiction — disable it until checking is back on.
+    el.chkAutoUpdateApply.disabled = !config.autoUpdateCheck;
     el.trayClickAction.value = config.trayClickAction;
     renderPresets();
   }
@@ -136,7 +191,6 @@
   async function saveConfig() {
     try {
       await App().SaveConfig(config);
-      showError("");
     } catch (err) {
       showError(String(err));
     }
@@ -148,22 +202,37 @@
     saveConfig();
   }
 
-  function movePreset(index, delta) {
-    const target = index + delta;
-    if (target < 0 || target >= config.timerList.length) return;
+  function movePresetTo(from, to) {
     const list = config.timerList;
-    [list[index], list[target]] = [list[target], list[index]];
+    const [item] = list.splice(from, 1);
+    list.splice(to, 0, item);
     renderPresets();
     saveConfig();
   }
 
+  // Parses "1h30m", "45m", "2h", "1h 2m 3s", or a bare number of minutes
+  // (e.g. "90" — kept for backward compatibility with the old plain-minutes
+  // field) into whole seconds. Returns null if nothing recognizable was
+  // found; doesn't require every unit, any subset works.
+  function parsePresetDuration(text) {
+    text = text.trim();
+    if (!text) return null;
+    if (/^\d+$/.test(text)) return parseInt(text, 10) * 60;
+    const match = text.match(/^(\d+h)?\s*(\d+m)?\s*(\d+s)?$/i);
+    if (!match || (!match[1] && !match[2] && !match[3])) return null;
+    let sec = 0;
+    if (match[1]) sec += parseInt(match[1], 10) * 3600;
+    if (match[2]) sec += parseInt(match[2], 10) * 60;
+    if (match[3]) sec += parseInt(match[3], 10);
+    return sec;
+  }
+
   function addPreset() {
-    const minutes = parseInt(el.presetMinutes.value, 10);
-    if (isNaN(minutes) || minutes < 0) {
-      showError("Enter a whole number of minutes (0 = unlimited).");
+    const sec = parsePresetDuration(el.presetMinutes.value);
+    if (sec === null || sec < 0) {
+      showError("Unrecognized format. Try e.g. 1h30m, 45m, or 0 for indefinite.");
       return;
     }
-    const sec = minutes * 60;
     if (config.timerList.includes(sec)) {
       showError("That preset already exists.");
       return;
@@ -196,11 +265,13 @@
     el.tabUntil.classList.toggle("active", mode === "until");
     el.paneDuration.hidden = mode !== "duration";
     el.paneUntil.hidden = mode !== "until";
+    scheduleResize();
   }
 
   function toggleWithDate() {
     el.untilTime.hidden = el.chkWithDate.checked;
     el.untilDateTime.hidden = !el.chkWithDate.checked;
+    scheduleResize();
   }
 
   function startAndClose(promise) {
@@ -277,6 +348,7 @@
         config.keepDisplayOn = el.chkDisplayOn.checked;
         config.autoStart = el.chkAutoStart.checked;
         config.autoUpdateCheck = el.chkAutoUpdateCheck.checked;
+        el.chkAutoUpdateApply.disabled = !el.chkAutoUpdateCheck.checked;
         config.autoUpdateApply = el.chkAutoUpdateApply.checked;
         saveConfig();
       });

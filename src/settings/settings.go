@@ -15,9 +15,9 @@ import (
 type TrayClickAction string
 
 const (
-	ActionCycle    TrayClickAction = "cycle"    // cycle through presets
-	ActionInfinite TrayClickAction = "infinite" // keep on indefinitely
-	ActionOpenMenu TrayClickAction = "menu"     // open tray menu
+	ActionCycle      TrayClickAction = "cycle"      // cycle through presets
+	ActionIndefinite TrayClickAction = "indefinite" // keep on indefinitely
+	ActionOpenMenu   TrayClickAction = "menu"       // open tray menu
 )
 
 type Config struct {
@@ -29,7 +29,7 @@ type Config struct {
 	// confirmation before installing.
 	AutoUpdateCheck bool            `json:"autoUpdateCheck"`
 	AutoUpdateApply bool            `json:"autoUpdateApply"`
-	TimerList       []int           `json:"timerList"` // seconds, 0 = unlimited
+	TimerList       []int           `json:"timerList"` // seconds, 0 = indefinite
 	TrayClickAction TrayClickAction `json:"trayClickAction"`
 }
 
@@ -54,7 +54,7 @@ func ValidateConfig(cfg Config) error {
 		}
 	}
 	switch cfg.TrayClickAction {
-	case "", ActionCycle, ActionInfinite, ActionOpenMenu:
+	case "", ActionCycle, ActionIndefinite, ActionOpenMenu:
 		return nil
 	default:
 		return fmt.Errorf("unknown tray click action: %q", cfg.TrayClickAction)
@@ -68,17 +68,17 @@ func ValidateConfig(cfg Config) error {
 type Mode string
 
 const (
-	ModeOff      Mode = "off"      // TurnOff, or a timer that ran out
-	ModeInfinite Mode = "infinite" // SetInfinite, or a preset/Cycle landing on an unlimited entry
-	ModeTimer    Mode = "timer"    // SetPreset/Cycle on a timed entry, or SetCustomDuration ("for a duration")
-	ModeSchedule Mode = "schedule" // SetSchedule ("until a date & time")
+	ModeOff        Mode = "off"        // TurnOff, or a timer that ran out
+	ModeIndefinite Mode = "indefinite" // SetIndefinite, or a preset/Cycle landing on an indefinite entry
+	ModeTimer      Mode = "timer"      // SetPreset/Cycle on a timed entry, or SetCustomDuration ("for a duration")
+	ModeSchedule   Mode = "schedule"   // SetSchedule ("until a date & time")
 )
 
 // Label renders a Mode for display (tray icon tooltip, CLI status output).
 func (m Mode) Label() string {
 	switch m {
-	case ModeInfinite:
-		return "Infinite"
+	case ModeIndefinite:
+		return "Indefinite"
 	case ModeTimer:
 		return "Timer"
 	case ModeSchedule:
@@ -91,16 +91,16 @@ func (m Mode) Label() string {
 // ---- Runtime state (not persisted — always reset on process restart) ----
 
 type State struct {
-	Active    bool
-	Infinite  bool
-	ExpiresAt time.Time // valid only when Active && !Infinite
-	Mode      Mode
+	Active     bool
+	Indefinite bool
+	ExpiresAt  time.Time // valid only when Active && !Indefinite
+	Mode       Mode
 
 	// PresetActive is true when the current state was started from an entry
 	// in Config.TimerList (via SetPreset or Cycle landing on one), as opposed
-	// to SetInfinite, SetCustomDuration, or SetSchedule. PresetSeconds (valid
-	// only when PresetActive) holds that entry's value, so callers can tell
-	// which preset is currently selected.
+	// to SetIndefinite, SetCustomDuration, or SetSchedule. PresetSeconds
+	// (valid only when PresetActive) holds that entry's value, so callers
+	// can tell which preset is currently selected.
 	PresetActive  bool
 	PresetSeconds int
 }
@@ -109,7 +109,7 @@ func (s State) RemainingLabel() string {
 	if !s.Active {
 		return "Off"
 	}
-	if s.Infinite {
+	if s.Indefinite {
 		return "Indefinite"
 	}
 	remaining := time.Until(s.ExpiresAt)
@@ -218,31 +218,31 @@ func (c *Controller) Cycle() {
 	}
 	seconds := list[next]
 	if seconds <= 0 {
-		c.apply(0, true, ModeInfinite) // unlimited
+		c.apply(0, true, ModeIndefinite) // indefinite
 	} else {
 		c.apply(time.Duration(seconds)*time.Second, false, ModeTimer)
 	}
 }
 
-func (c *Controller) SetInfinite() {
+func (c *Controller) SetIndefinite() {
 	c.mu.Lock()
 	c.timerIndex = -1
 	c.mu.Unlock()
-	c.apply(0, true, ModeInfinite)
+	c.apply(0, true, ModeIndefinite)
 }
 
-func (c *Controller) ToggleInfinite() {
+func (c *Controller) ToggleIndefinite() {
 	c.mu.Lock()
-	activeInfinite := c.state.Active && c.state.Infinite
+	activeIndefinite := c.state.Active && c.state.Indefinite
 	c.mu.Unlock()
-	if activeInfinite {
+	if activeIndefinite {
 		c.TurnOff()
 	} else {
-		c.SetInfinite()
+		c.SetIndefinite()
 	}
 }
 
-// SetPreset: seconds<=0 means unlimited; >0 keeps it on for that duration (Infinite=false).
+// SetPreset: seconds<=0 means indefinite; >0 keeps it on for that duration (Indefinite=false).
 func (c *Controller) SetPreset(seconds int) {
 	c.mu.Lock()
 	c.timerIndex = -1
@@ -255,7 +255,7 @@ func (c *Controller) SetPreset(seconds int) {
 	c.mu.Unlock()
 
 	if seconds <= 0 {
-		c.apply(0, true, ModeInfinite)
+		c.apply(0, true, ModeIndefinite)
 	} else {
 		c.apply(time.Duration(seconds)*time.Second, false, ModeTimer)
 	}
@@ -293,15 +293,15 @@ func (c *Controller) TurnOff() {
 	c.apply(0, false, ModeOff)
 }
 
-func (c *Controller) apply(d time.Duration, infinite bool, mode Mode) {
+func (c *Controller) apply(d time.Duration, indefinite bool, mode Mode) {
 	c.mu.Lock()
 	if c.timer != nil {
 		c.timer.Stop()
 		c.timer = nil
 	}
-	active := d > 0 || infinite
+	active := d > 0 || indefinite
 	var expiresAt time.Time
-	if active && !infinite {
+	if active && !indefinite {
 		expiresAt = time.Now().Add(d)
 		c.timer = time.AfterFunc(d, func() { c.TurnOff() })
 	}
@@ -316,7 +316,7 @@ func (c *Controller) apply(d time.Duration, infinite bool, mode Mode) {
 	}
 	c.state = State{
 		Active:        active,
-		Infinite:      infinite,
+		Indefinite:    indefinite,
 		ExpiresAt:     expiresAt,
 		Mode:          mode,
 		PresetActive:  presetActive,
@@ -350,10 +350,10 @@ func ParseDuration(input string) (time.Duration, error) {
 	return d, nil
 }
 
-// FormatDurationSec converts seconds into a readable string like "15m", "1h", "Unlimited".
+// FormatDurationSec converts seconds into a readable string like "15m", "1h", "Indefinite".
 func FormatDurationSec(sec int) string {
 	if sec <= 0 {
-		return "Unlimited"
+		return "Indefinite"
 	}
 	h := sec / 3600
 	m := (sec % 3600) / 60
