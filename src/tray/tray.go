@@ -31,42 +31,60 @@ func onReady(ctrl *settings.Controller, onSettings func(), onQuit func()) {
 	mKeepDisplay := systray.AddMenuItemCheckbox("Keep display on", "Also keep the display from turning off", cfg.KeepDisplayOn)
 	mInfinite := systray.AddMenuItemCheckbox("Keep on indefinitely", "Keep the system awake indefinitely", state.Active && state.Infinite)
 
-	mPresets := systray.AddMenuItem("Timer presets", "Choose a preset duration")
-	var subItems []*systray.MenuItem
+	mPresets := systray.AddMenuItemCheckbox("Timer presets", "Choose a preset duration", state.PresetActive)
+
+	type presetItem struct {
+		item    *systray.MenuItem
+		seconds int
+		label   string
+	}
+	var subItems []presetItem
 	var subItemsMu sync.Mutex
+
+	updatePresetChecks := func(s settings.State) {
+		subItemsMu.Lock()
+		defer subItemsMu.Unlock()
+		anyChecked := false
+		for _, p := range subItems {
+			if s.Active && s.PresetActive && p.seconds == s.PresetSeconds {
+				p.item.Check()
+				p.item.SetTooltip(p.label + " - " + s.RemainingLabel())
+				anyChecked = true
+			} else {
+				p.item.Uncheck()
+				p.item.SetTooltip("Start " + p.label)
+			}
+		}
+		if anyChecked {
+			mPresets.Check()
+		} else {
+			mPresets.Uncheck()
+		}
+	}
 
 	rebuildPresets := func(timerList []int) {
 		subItemsMu.Lock()
-		defer subItemsMu.Unlock()
-		for _, item := range subItems {
-			item.Remove()
+		for _, p := range subItems {
+			p.item.Remove()
 		}
 		subItems = nil
 		for _, sec := range timerList {
 			label := settings.FormatDurationSec(sec)
-			sub := mPresets.AddSubMenuItem(label, "Start "+label)
-			subItems = append(subItems, sub)
+			sub := mPresets.AddSubMenuItemCheckbox(label, "Start "+label, false)
+			subItems = append(subItems, presetItem{item: sub, seconds: sec, label: label})
 			go func(s *systray.MenuItem, durationSec int) {
 				for range s.ClickedCh {
 					ctrl.SetPreset(durationSec)
 				}
 			}(sub, sec)
 		}
+		subItemsMu.Unlock()
+		updatePresetChecks(ctrl.State())
 	}
 
 	rebuildPresets(cfg.TimerList)
 
-	mToggle := systray.AddMenuItem("Turn Off", "Turn off the timer")
-	updateToggleItem := func(s settings.State) {
-		if s.Active {
-			mToggle.SetTitle("Turn Off")
-			mToggle.SetTooltip("Turn off the active timer")
-		} else {
-			mToggle.SetTitle("Turn On")
-			mToggle.SetTooltip("Turn on the timer")
-		}
-	}
-	updateToggleItem(state)
+	mOff := systray.AddMenuItemCheckbox("Off", "Turn off the timer", !state.Active)
 
 	systray.AddSeparator()
 	mSettings := systray.AddMenuItem("Settings...", "Open settings window")
@@ -101,19 +119,26 @@ func onReady(ctrl *settings.Controller, onSettings func(), onQuit func()) {
 
 	ctrl.OnStateChange(func(s settings.State) {
 		updateTooltip(s)
-		updateToggleItem(s)
+		if s.Active {
+			mOff.Uncheck()
+		} else {
+			mOff.Check()
+		}
 		if s.Active && s.Infinite {
 			mInfinite.Check()
 		} else {
 			mInfinite.Uncheck()
 		}
+		updatePresetChecks(s)
 	})
 
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			updateTooltip(ctrl.State())
+			s := ctrl.State()
+			updateTooltip(s)
+			updatePresetChecks(s)
 		}
 	}()
 
@@ -124,12 +149,8 @@ func onReady(ctrl *settings.Controller, onSettings func(), onQuit func()) {
 				_ = ctrl.ToggleKeepDisplayOn()
 			case <-mInfinite.ClickedCh:
 				ctrl.ToggleInfinite()
-			case <-mToggle.ClickedCh:
-				if ctrl.State().Active {
-					ctrl.TurnOff()
-				} else {
-					ctrl.Cycle()
-				}
+			case <-mOff.ClickedCh:
+				ctrl.TurnOff()
 			case <-mSettings.ClickedCh:
 				onSettings()
 			case <-mQuit.ClickedCh:

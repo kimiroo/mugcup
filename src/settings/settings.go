@@ -61,6 +61,14 @@ type State struct {
 	Active    bool
 	Infinite  bool
 	ExpiresAt time.Time // valid only when Active && !Infinite
+
+	// PresetActive is true when the current state was started from an entry
+	// in Config.TimerList (via SetPreset or Cycle landing on one), as opposed
+	// to SetInfinite or SetCustomDuration. PresetSeconds (valid only when
+	// PresetActive) holds that entry's value, so callers can tell which
+	// preset is currently selected.
+	PresetActive  bool
+	PresetSeconds int
 }
 
 func (s State) RemainingLabel() string {
@@ -249,7 +257,19 @@ func (c *Controller) apply(d time.Duration, infinite bool) {
 		expiresAt = time.Now().Add(d)
 		c.timer = time.AfterFunc(d, func() { c.TurnOff() })
 	}
-	c.state = State{Active: active, Infinite: infinite, ExpiresAt: expiresAt}
+	presetActive := false
+	presetSeconds := 0
+	if active && c.timerIndex >= 0 && c.timerIndex < len(c.cfg.TimerList) {
+		presetActive = true
+		presetSeconds = c.cfg.TimerList[c.timerIndex]
+	}
+	c.state = State{
+		Active:        active,
+		Infinite:      infinite,
+		ExpiresAt:     expiresAt,
+		PresetActive:  presetActive,
+		PresetSeconds: presetSeconds,
+	}
 	state := c.state
 	listeners := append([]func(State){}, c.stListeners...)
 	cfg := c.cfg
