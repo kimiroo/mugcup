@@ -15,7 +15,6 @@ import (
 	"mugcup/ipc"
 	"mugcup/settings"
 	"mugcup/tray"
-	"mugcup/ui"
 
 	"github.com/tailscale/walk"
 )
@@ -69,7 +68,7 @@ func main() {
 		log.Fatal("walk.InitApp failed:", err)
 	}
 
-	ui.Init(ctrl)
+	initWails(ctrl, app)
 
 	// Each command arrives on a TCP accept goroutine, but Controller changes
 	// can trigger tray menu rebuilds, which must run on the walk main thread
@@ -88,7 +87,7 @@ func main() {
 	}
 
 	start, end := tray.Start(ctrl, func() {
-		ui.OpenSettingsWindow()
+		openSettingsWindow()
 	}, quitHandler)
 	start()
 	defer end()
@@ -110,6 +109,22 @@ func runOnMainThread(app *walk.Application, fn func() ipc.Response) ipc.Response
 		return resp
 	case <-time.After(6 * time.Second):
 		return ipc.Response{Success: false, Message: "mugcup timed out processing the request internally."}
+	}
+}
+
+// runOnMainThreadVoid is runOnMainThread without a return value, used by the
+// Wails-bound methods (wailsapp.go) for the same reason: any Controller
+// mutation that can trigger a tray menu rebuild must run on the walk main
+// thread, regardless of which goroutine Wails dispatches the JS call on.
+func runOnMainThreadVoid(app *walk.Application, fn func()) {
+	done := make(chan struct{}, 1)
+	app.Synchronize(func() {
+		fn()
+		done <- struct{}{}
+	})
+	select {
+	case <-done:
+	case <-time.After(6 * time.Second):
 	}
 }
 
@@ -144,6 +159,10 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 
 	case "config":
 		return ipc.Response{Success: true, Message: "Retrieved the current config.", Config: configPayload(ctrl)}
+
+	case "settings", "show":
+		openSettingsWindow()
+		return ipc.Response{Success: true, Message: "Opened the settings window."}
 
 	case "export":
 		return ipc.Response{Success: true, Message: "Exporting the current config.", Config: configPayload(ctrl)}

@@ -58,8 +58,10 @@ try {
             }
 
             try {
+                # "desktop,production" are required by Wails v2 to select the
+                # real desktop frontend and disable the dev inspector/console.
                 $guiOutputPath = Join-Path $outputDir "mugcup.exe"
-                go build -ldflags "-H=windowsgui" -o $guiOutputPath .
+                go build -tags "desktop,production" -ldflags "-H=windowsgui -s -w" -o $guiOutputPath .
                 if ($LASTEXITCODE -ne 0) {
                     throw "$architecture GUI build failed."
                 }

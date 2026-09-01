@@ -26,6 +26,7 @@ Commands:
   start preset <n>         Start the n-th preset from the configured list (0-based)
   stop                     Turn off the timer and keep-on
   config                   Show the current config
+  settings                 Open the settings window
   status                   Show the current status
   exit                     Exit the running mugcup
   import <path.json>       Read a config file and apply it (stdin if omitted)
@@ -194,6 +195,13 @@ func main() {
 
 	case "config":
 		resp, ok := sendToRunningInstance(Request{Command: "config", DisplayOn: opts.displayOn})
+		if !ok {
+			fail(notRunningMsg)
+		}
+		printResult(opts, resp)
+
+	case "settings":
+		resp, ok := sendToRunningInstance(Request{Command: "settings", DisplayOn: opts.displayOn})
 		if !ok {
 			fail(notRunningMsg)
 		}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mugcup</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="head">
+      <div class="head-title">mugcup</div>
+      <div class="status-pill" id="statusPill">—</div>
+    </header>
+
+    <section class="card">
+      <div class="quick-row">
+        <button class="btn btn-accent" id="btnInfinite">Keep on indefinitely</button>
+        <button class="btn" id="btnStop">Turn off</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Presets</h2>
+      <ul class="preset-list" id="presetList"></ul>
+      <div class="preset-add">
+        <input type="number" id="presetMinutes" min="0" placeholder="Minutes (0 = unlimited)">
+        <button class="btn" id="btnAddPreset">+ Add</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Start with a custom duration</h2>
+      <div class="duration-row">
+        <input type="time" id="durationTime" value="00:30:00" step="1">
+        <button class="btn btn-accent" id="btnStartDuration">Start</button>
+      </div>
+      <div class="duration-row">
+        <input type="text" id="freeText" placeholder="or type e.g. 1h30m, 45m">
+        <button class="btn" id="btnStartFreeText">Start</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>General</h2>
+      <label class="switch-row">
+        <span>Also keep the display on</span>
+        <span class="switch"><input type="checkbox" id="chkDisplayOn"><span class="track"><span class="thumb"></span></span></span>
+      </label>
+      <label class="switch-row">
+        <span>Start automatically with Windows</span>
+        <span class="switch"><input type="checkbox" id="chkAutoStart"><span class="track"><span class="thumb"></span></span></span>
+      </label>
+      <label class="switch-row">
+        <span>Auto update</span>
+        <span class="switch"><input type="checkbox" id="chkAutoUpdate"><span class="track"><span class="thumb"></span></span></span>
+      </label>
+      <label class="select-row">
+        <span>Tray click action</span>
+        <select id="trayClickAction">
+          <option value="cycle">Cycle through presets</option>
+          <option value="infinite">Keep on indefinitely</option>
+          <option value="menu">Open tray menu</option>
+        </select>
+      </label>
+    </section>
+
+    <div class="error" id="errorLabel" hidden></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
