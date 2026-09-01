@@ -57,18 +57,19 @@
 
         <div class="mode-pane" id="paneDuration">
           <div class="duration-row">
-            <input type="time" id="durationTime" value="00:30:00" step="1">
+            <input type="text" id="freeText" placeholder="e.g. 1h30m, 45m">
             <button class="btn btn-accent" id="btnStartDuration">Start</button>
-          </div>
-          <div class="duration-row">
-            <input type="text" id="freeText" placeholder="or type e.g. 1h30m, 45m">
-            <button class="btn" id="btnStartFreeText">Start</button>
           </div>
         </div>
 
         <div class="mode-pane" id="paneUntil" hidden>
+          <label class="switch-row">
+            <span>With date</span>
+            <span class="switch"><input type="checkbox" id="chkWithDate"><span class="track"><span class="thumb"></span></span></span>
+          </label>
           <div class="duration-row">
-            <input type="datetime-local" id="untilInput">
+            <input type="time" id="untilTime" step="1">
+            <input type="datetime-local" id="untilDateTime" hidden>
             <button class="btn btn-accent" id="btnStartUntil">Start</button>
           </div>
         </div>

@@ -33,9 +33,9 @@ func Start(ctrl *settings.Controller, cb Callbacks) (start, end func()) {
 }
 
 func onReady(ctrl *settings.Controller, cb Callbacks) {
-	systray.SetIcon(assets.IconICO)
 	cfg := ctrl.Config()
 	state := ctrl.State()
+	updateTrayIcon(state)
 	updateTooltip(state)
 
 	mInfinite := systray.AddMenuItemCheckbox("Indefinitely", "Keep the system awake indefinitely", state.Active && state.Infinite)
@@ -130,6 +130,7 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 	})
 
 	ctrl.OnStateChange(func(s settings.State) {
+		updateTrayIcon(s)
 		updateTooltip(s)
 		if s.Active {
 			mOff.Uncheck()
@@ -188,4 +189,17 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 
 func updateTooltip(s settings.State) {
 	systray.SetTooltip("mugcup - " + s.RemainingLabel())
+}
+
+func updateTrayIcon(s settings.State) {
+	switch s.Mode {
+	case settings.ModeInfinite:
+		systray.SetIcon(assets.IconInfiniteICO)
+	case settings.ModeTimer:
+		systray.SetIcon(assets.IconClockICO)
+	case settings.ModeSchedule:
+		systray.SetIcon(assets.IconScheduleICO)
+	default:
+		systray.SetIcon(assets.IconDisabledICO)
+	}
 }

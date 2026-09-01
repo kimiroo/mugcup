@@ -248,6 +248,7 @@ func statusPayload(ctrl *settings.Controller) *ipc.StatusPayload {
 	return &ipc.StatusPayload{
 		Active:         st.Active,
 		Infinite:       st.Infinite,
+		Mode:           string(st.Mode),
 		RemainingSec:   remainingSec,
 		RemainingLabel: st.RemainingLabel(),
 		KeepDisplayOn:  ctrl.Config().KeepDisplayOn,

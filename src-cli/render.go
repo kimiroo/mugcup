@@ -50,6 +50,20 @@ func formatPresetSec(sec int) string {
 	}
 }
 
+var modeLabels = map[string]string{
+	"off":      "Off",
+	"infinite": "Infinite",
+	"timer":    "Timer",
+	"schedule": "Schedule",
+}
+
+func formatMode(mode string) string {
+	if label, ok := modeLabels[mode]; ok {
+		return label
+	}
+	return mode
+}
+
 var trayClickActionLabels = map[string]string{
 	"cycle":    "Cycle through presets",
 	"infinite": "Keep on indefinitely",
@@ -65,6 +79,7 @@ func formatTrayClickAction(action string) string {
 
 func renderStatusText(s *StatusPayload) string {
 	var b strings.Builder
+	fmt.Fprintf(&b, "Mode: %s\n", formatMode(s.Mode))
 	fmt.Fprintf(&b, "Remaining: %s\n", formatRemaining(s.Active, s.Infinite, s.RemainingSec))
 	fmt.Fprintf(&b, "Keep display on: %s", formatYesNo(s.KeepDisplayOn))
 	return b.String()

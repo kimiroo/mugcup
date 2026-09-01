@@ -55,18 +55,46 @@ func ValidateConfig(cfg Config) error {
 	}
 }
 
+// Mode is how the current state was started, for callers that display it
+// differently per-origin (the tray's icon, the CLI's status output) even
+// though Timer and Schedule behave identically once running (both just
+// count down to off).
+type Mode string
+
+const (
+	ModeOff      Mode = "off"      // TurnOff, or a timer that ran out
+	ModeInfinite Mode = "infinite" // SetInfinite, or a preset/Cycle landing on an unlimited entry
+	ModeTimer    Mode = "timer"    // SetPreset/Cycle on a timed entry, or SetCustomDuration ("for a duration")
+	ModeSchedule Mode = "schedule" // SetSchedule ("until a date & time")
+)
+
+// Label renders a Mode for display (tray icon tooltip, CLI status output).
+func (m Mode) Label() string {
+	switch m {
+	case ModeInfinite:
+		return "Infinite"
+	case ModeTimer:
+		return "Timer"
+	case ModeSchedule:
+		return "Schedule"
+	default:
+		return "Off"
+	}
+}
+
 // ---- Runtime state (not persisted — always reset on process restart) ----
 
 type State struct {
 	Active    bool
 	Infinite  bool
 	ExpiresAt time.Time // valid only when Active && !Infinite
+	Mode      Mode
 
 	// PresetActive is true when the current state was started from an entry
 	// in Config.TimerList (via SetPreset or Cycle landing on one), as opposed
-	// to SetInfinite or SetCustomDuration. PresetSeconds (valid only when
-	// PresetActive) holds that entry's value, so callers can tell which
-	// preset is currently selected.
+	// to SetInfinite, SetCustomDuration, or SetSchedule. PresetSeconds (valid
+	// only when PresetActive) holds that entry's value, so callers can tell
+	// which preset is currently selected.
 	PresetActive  bool
 	PresetSeconds int
 }
@@ -106,7 +134,7 @@ func NewController(cfg Config) *Controller {
 	if cfg.TrayClickAction == "" {
 		cfg.TrayClickAction = ActionCycle
 	}
-	return &Controller{cfg: cfg, timerIndex: -1}
+	return &Controller{cfg: cfg, timerIndex: -1, state: State{Mode: ModeOff}}
 }
 
 func (c *Controller) Config() Config {
@@ -179,14 +207,14 @@ func (c *Controller) Cycle() {
 	c.mu.Unlock()
 
 	if next == -1 {
-		c.apply(0, false)
+		c.apply(0, false, ModeOff)
 		return
 	}
 	seconds := list[next]
 	if seconds <= 0 {
-		c.apply(0, true) // unlimited
+		c.apply(0, true, ModeInfinite) // unlimited
 	} else {
-		c.apply(time.Duration(seconds)*time.Second, false)
+		c.apply(time.Duration(seconds)*time.Second, false, ModeTimer)
 	}
 }
 
@@ -194,7 +222,7 @@ func (c *Controller) SetInfinite() {
 	c.mu.Lock()
 	c.timerIndex = -1
 	c.mu.Unlock()
-	c.apply(0, true)
+	c.apply(0, true, ModeInfinite)
 }
 
 func (c *Controller) ToggleInfinite() {
@@ -221,20 +249,34 @@ func (c *Controller) SetPreset(seconds int) {
 	c.mu.Unlock()
 
 	if seconds <= 0 {
-		c.apply(0, true)
+		c.apply(0, true, ModeInfinite)
 	} else {
-		c.apply(time.Duration(seconds)*time.Second, false)
+		c.apply(time.Duration(seconds)*time.Second, false, ModeTimer)
 	}
 }
 
+// SetCustomDuration starts a one-off timer for exactly d ("for a duration" in
+// the Custom popup). See SetSchedule for the "until a date & time" variant.
 func (c *Controller) SetCustomDuration(d time.Duration) error {
+	return c.startFor(d, ModeTimer)
+}
+
+// SetSchedule starts a one-off timer for d, where d was computed by the
+// caller as time-until-target ("until a date & time" in the Custom popup).
+// Behaves identically to SetCustomDuration once running; only Mode differs,
+// so callers (tray icon, CLI status) can tell how it was started.
+func (c *Controller) SetSchedule(d time.Duration) error {
+	return c.startFor(d, ModeSchedule)
+}
+
+func (c *Controller) startFor(d time.Duration, mode Mode) error {
 	if d <= 0 {
 		return errors.New("duration must be greater than 0")
 	}
 	c.mu.Lock()
 	c.timerIndex = -1
 	c.mu.Unlock()
-	c.apply(d, false)
+	c.apply(d, false, mode)
 	return nil
 }
 
@@ -242,10 +284,10 @@ func (c *Controller) TurnOff() {
 	c.mu.Lock()
 	c.timerIndex = -1
 	c.mu.Unlock()
-	c.apply(0, false)
+	c.apply(0, false, ModeOff)
 }
 
-func (c *Controller) apply(d time.Duration, infinite bool) {
+func (c *Controller) apply(d time.Duration, infinite bool, mode Mode) {
 	c.mu.Lock()
 	if c.timer != nil {
 		c.timer.Stop()
@@ -257,6 +299,9 @@ func (c *Controller) apply(d time.Duration, infinite bool) {
 		expiresAt = time.Now().Add(d)
 		c.timer = time.AfterFunc(d, func() { c.TurnOff() })
 	}
+	if !active {
+		mode = ModeOff
+	}
 	presetActive := false
 	presetSeconds := 0
 	if active && c.timerIndex >= 0 && c.timerIndex < len(c.cfg.TimerList) {
@@ -267,6 +312,7 @@ func (c *Controller) apply(d time.Duration, infinite bool) {
 		Active:        active,
 		Infinite:      infinite,
 		ExpiresAt:     expiresAt,
+		Mode:          mode,
 		PresetActive:  presetActive,
 		PresetSeconds: presetSeconds,
 	}

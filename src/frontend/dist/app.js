@@ -20,11 +20,11 @@
     tabUntil: document.getElementById("tabUntil"),
     paneDuration: document.getElementById("paneDuration"),
     paneUntil: document.getElementById("paneUntil"),
-    durationTime: document.getElementById("durationTime"),
-    btnStartDuration: document.getElementById("btnStartDuration"),
     freeText: document.getElementById("freeText"),
-    btnStartFreeText: document.getElementById("btnStartFreeText"),
-    untilInput: document.getElementById("untilInput"),
+    btnStartDuration: document.getElementById("btnStartDuration"),
+    chkWithDate: document.getElementById("chkWithDate"),
+    untilTime: document.getElementById("untilTime"),
+    untilDateTime: document.getElementById("untilDateTime"),
     btnStartUntil: document.getElementById("btnStartUntil"),
     btnCancelCustom: document.getElementById("btnCancelCustom"),
 
@@ -174,11 +174,17 @@
 
   function resetCustomForm() {
     setCustomMode("duration");
-    el.durationTime.value = "00:30:00";
     el.freeText.value = "";
-    const local = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+
+    const defaultTarget = new Date(Date.now() + 30 * 60000);
+    el.untilTime.value = `${String(defaultTarget.getHours()).padStart(2, "0")}:${String(defaultTarget.getMinutes()).padStart(2, "0")}`;
+    const local = new Date(defaultTarget.getTime() - defaultTarget.getTimezoneOffset() * 60000);
     local.setSeconds(0, 0);
-    el.untilInput.value = local.toISOString().slice(0, 16);
+    el.untilDateTime.value = local.toISOString().slice(0, 16);
+
+    el.chkWithDate.checked = false;
+    el.untilTime.hidden = false;
+    el.untilDateTime.hidden = true;
   }
 
   function setCustomMode(mode) {
@@ -188,32 +194,22 @@
     el.paneUntil.hidden = mode !== "until";
   }
 
-  function parseTimeInputToSeconds(value) {
-    // <input type="time" step="1"> gives "HH:MM" or "HH:MM:SS".
-    const parts = value.split(":").map((p) => parseInt(p, 10) || 0);
-    const [h = 0, m = 0, s = 0] = parts;
-    return h * 3600 + m * 60 + s;
+  function toggleWithDate() {
+    el.untilTime.hidden = el.chkWithDate.checked;
+    el.untilDateTime.hidden = !el.chkWithDate.checked;
   }
 
-  function startAndClose(sec) {
-    App()
-      .StartDurationSeconds(sec)
-      .then(() => App().Hide())
-      .catch((err) => showError(String(err)));
+  function startAndClose(promise) {
+    promise.then(() => App().Hide()).catch((err) => showError(String(err)));
   }
 
+  // "For a duration": free-text only, e.g. "1h30m", "45m".
   function startDuration() {
-    const sec = parseTimeInputToSeconds(el.durationTime.value);
-    if (sec <= 0) {
-      showError("Enter a duration greater than 0.");
+    const text = el.freeText.value.trim();
+    if (!text) {
+      showError("Enter a duration, e.g. 1h30m, 45m.");
       return;
     }
-    startAndClose(sec);
-  }
-
-  function startFreeText() {
-    const text = el.freeText.value.trim();
-    if (!text) return;
     const match = text.match(/(\d+h)?\s*(\d+m)?\s*(\d+s)?/i);
     let sec = 0;
     if (match) {
@@ -225,21 +221,39 @@
       showError("Unrecognized format. Try e.g. 1h30m, 45m.");
       return;
     }
-    startAndClose(sec);
+    startAndClose(App().StartDurationSeconds(sec));
   }
 
+  // "Until a date & time": with "With date" off, the target is today at the
+  // picked time; with it on, the target is the picked date and time.
   function startUntil() {
-    if (!el.untilInput.value) {
-      showError("Pick a date and time.");
-      return;
+    let target;
+    if (el.chkWithDate.checked) {
+      if (!el.untilDateTime.value) {
+        showError("Pick a date and time.");
+        return;
+      }
+      target = new Date(el.untilDateTime.value);
+    } else {
+      if (!el.untilTime.value) {
+        showError("Pick a time.");
+        return;
+      }
+      const [h = 0, m = 0, s = 0] = el.untilTime.value.split(":").map((p) => parseInt(p, 10) || 0);
+      target = new Date();
+      target.setHours(h, m, s, 0);
     }
-    const target = new Date(el.untilInput.value);
+
     const sec = Math.floor((target.getTime() - Date.now()) / 1000);
     if (sec <= 0) {
-      showError("Pick a date and time in the future.");
+      showError(
+        el.chkWithDate.checked
+          ? "Pick a date and time in the future."
+          : 'Pick a time later today, or turn on "With date" to choose another day.'
+      );
       return;
     }
-    startAndClose(sec);
+    startAndClose(App().StartScheduleSeconds(sec));
   }
 
   // ---- About view ----
@@ -270,11 +284,16 @@
     el.tabDuration.addEventListener("click", () => setCustomMode("duration"));
     el.tabUntil.addEventListener("click", () => setCustomMode("until"));
     el.btnStartDuration.addEventListener("click", startDuration);
-    el.btnStartFreeText.addEventListener("click", startFreeText);
     el.freeText.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") startFreeText();
+      if (e.key === "Enter") startDuration();
     });
+    el.chkWithDate.addEventListener("change", toggleWithDate);
     el.btnStartUntil.addEventListener("click", startUntil);
+    [el.untilTime, el.untilDateTime].forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") startUntil();
+      });
+    });
     el.btnCancelCustom.addEventListener("click", () => App().Hide());
 
     el.btnRepo.addEventListener("click", openRepo);

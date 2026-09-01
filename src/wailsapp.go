@@ -235,9 +235,8 @@ func (a *App) OpenRepo() {
 	}
 }
 
-// StartDurationSeconds starts a one-off custom timer, used by the Custom
-// view for both its "for a duration" and "until a date/time" modes (the
-// latter converts to a duration client-side before calling this).
+// StartDurationSeconds starts a one-off custom timer (Mode: Timer), used by
+// the Custom view's "for a duration" tab.
 func (a *App) StartDurationSeconds(sec int) (*ipc.StatusPayload, error) {
 	if sec <= 0 {
 		return nil, fmt.Errorf("duration must be greater than 0")
@@ -245,6 +244,23 @@ func (a *App) StartDurationSeconds(sec int) (*ipc.StatusPayload, error) {
 	var setErr error
 	runOnMainThreadVoid(a.walkApp, func() {
 		setErr = a.ctrl.SetCustomDuration(time.Duration(sec) * time.Second)
+	})
+	if setErr != nil {
+		return nil, setErr
+	}
+	return statusPayload(a.ctrl), nil
+}
+
+// StartScheduleSeconds starts a one-off custom timer (Mode: Schedule), used
+// by the Custom view's "until a date & time" tab, which computes seconds
+// until the target client-side before calling this.
+func (a *App) StartScheduleSeconds(sec int) (*ipc.StatusPayload, error) {
+	if sec <= 0 {
+		return nil, fmt.Errorf("duration must be greater than 0")
+	}
+	var setErr error
+	runOnMainThreadVoid(a.walkApp, func() {
+		setErr = a.ctrl.SetSchedule(time.Duration(sec) * time.Second)
 	})
 	if setErr != nil {
 		return nil, setErr

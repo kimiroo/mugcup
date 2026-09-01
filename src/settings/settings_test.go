@@ -2,6 +2,7 @@ package settings
 
 import (
 	"testing"
+	"time"
 )
 
 func TestFormatDurationSec(t *testing.T) {
@@ -56,6 +57,49 @@ func TestControllerStateAndPresets(t *testing.T) {
 	st = ctrl.State()
 	if st.Active {
 		t.Errorf("Expected Active=false after ToggleInfinite on active infinite, got %+v", st)
+	}
+}
+
+func TestControllerMode(t *testing.T) {
+	cfg := DefaultConfig() // TimerList: 15m, 30m, 1h, 2h, Unlimited
+	ctrl := NewController(cfg)
+
+	if got := ctrl.State().Mode; got != ModeOff {
+		t.Errorf("Expected initial Mode=%q, got %q", ModeOff, got)
+	}
+
+	ctrl.SetInfinite()
+	if got := ctrl.State().Mode; got != ModeInfinite {
+		t.Errorf("SetInfinite: expected Mode=%q, got %q", ModeInfinite, got)
+	}
+
+	ctrl.SetPreset(15 * 60)
+	if got := ctrl.State().Mode; got != ModeTimer {
+		t.Errorf("SetPreset(timed): expected Mode=%q, got %q", ModeTimer, got)
+	}
+
+	ctrl.SetPreset(0)
+	if got := ctrl.State().Mode; got != ModeInfinite {
+		t.Errorf("SetPreset(unlimited): expected Mode=%q, got %q", ModeInfinite, got)
+	}
+
+	if err := ctrl.SetCustomDuration(10 * time.Minute); err != nil {
+		t.Fatalf("SetCustomDuration: %v", err)
+	}
+	if got := ctrl.State().Mode; got != ModeTimer {
+		t.Errorf("SetCustomDuration: expected Mode=%q, got %q", ModeTimer, got)
+	}
+
+	if err := ctrl.SetSchedule(10 * time.Minute); err != nil {
+		t.Fatalf("SetSchedule: %v", err)
+	}
+	if got := ctrl.State().Mode; got != ModeSchedule {
+		t.Errorf("SetSchedule: expected Mode=%q, got %q", ModeSchedule, got)
+	}
+
+	ctrl.TurnOff()
+	if got := ctrl.State().Mode; got != ModeOff {
+		t.Errorf("TurnOff: expected Mode=%q, got %q", ModeOff, got)
 	}
 }
 
