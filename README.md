@@ -1,8 +1,7 @@
-<p align="center">
-  <img src="assets/svg/logo.svg" width="140" alt="mugcup logo">
-</p>
-
-<h1 align="center">mugcup</h1>
+<h1 align="center">
+  <img src="assets/svg/logo.svg" width="200" alt="mugcup logo"><br>
+  mugcup
+</h1>
 <p align="center"><i>An overengineered caffeine pill for Windows.</i></p>
 
 <p align="center">
