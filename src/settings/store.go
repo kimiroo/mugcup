@@ -15,7 +15,9 @@ import (
 
 var logger = applog.New("settings")
 
-func configPath() (string, error) {
+// appDir resolves (and creates) %APPDATA%\mugcup, the directory both
+// config.json and state.json live in.
+func appDir() (string, error) {
 	dir, err := os.UserConfigDir() // Windows: %APPDATA%
 	if err != nil {
 		return "", err
@@ -24,7 +26,23 @@ func configPath() (string, error) {
 	if err := os.MkdirAll(appDir, 0o755); err != nil {
 		return "", err
 	}
-	return filepath.Join(appDir, "config.json"), nil
+	return appDir, nil
+}
+
+func configPath() (string, error) {
+	dir, err := appDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.json"), nil
+}
+
+func statePath() (string, error) {
+	dir, err := appDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "state.json"), nil
 }
 
 func SaveConfig(c Config) error {
@@ -95,6 +113,77 @@ func LoadConfig() (Config, error) {
 		return DefaultConfig(), err
 	}
 	return c, nil
+}
+
+// saveState writes s to state.json (temp file + rename, same as SaveConfig)
+// so a running timer survives a restart — see Controller.apply, its only
+// caller. Failures are logged and otherwise swallowed: a lost state save
+// just means the next restart comes up Off instead of resuming, which is
+// the same as today's behavior, so it isn't worth surfacing to the user.
+func saveState(s PersistedState) {
+	path, err := statePath()
+	if err != nil {
+		logger.Printf("failed to resolve the state path, not saving timer state: %v", err)
+		return
+	}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		logger.Printf("failed to marshal timer state, not saving: %v", err)
+		return
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), "state-*.json")
+	if err != nil {
+		logger.Printf("failed to save state.json: %v", err)
+		return
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		logger.Printf("failed to save state.json: %v", err)
+		return
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		logger.Printf("failed to save state.json: %v", err)
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		logger.Printf("failed to save state.json: %v", err)
+		return
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		logger.Printf("failed to save state.json: %v", err)
+		return
+	}
+}
+
+// loadState reads state.json, returning ok=false if it doesn't exist or is
+// unusable (same fall-through-to-defaults approach as LoadConfig, just with
+// no persisted state instead of DefaultConfig as the fallback value).
+func loadState() (PersistedState, bool) {
+	path, err := statePath()
+	if err != nil {
+		logger.Printf("failed to resolve the state path, starting Off: %v", err)
+		return PersistedState{}, false
+	}
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		logger.Println("No saved timer state found, starting Off.")
+		return PersistedState{}, false
+	}
+	if err != nil {
+		logger.Printf("failed to read state.json, starting Off: %v", err)
+		return PersistedState{}, false
+	}
+	var s PersistedState
+	if err := json.Unmarshal(data, &s); err != nil {
+		logger.Printf("state.json is not valid JSON, starting Off: %v", err)
+		return PersistedState{}, false
+	}
+	logger.Printf("Timer state loaded: %s", s)
+	return s, true
 }
 
 // configJSONKeys are the exact JSON object keys a config import must have,

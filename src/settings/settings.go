@@ -98,7 +98,8 @@ func (m Mode) Label() string {
 	}
 }
 
-// ---- Runtime state (not persisted — always reset on process restart) ----
+// ---- Runtime state (mirrored to state.json on every change — see
+// PersistedState below and Controller.apply, its only writer) ----
 
 type State struct {
 	Active     bool
@@ -132,6 +133,30 @@ func (s State) RemainingLabel() string {
 		return fmt.Sprintf("%dh %dm left", h, m)
 	}
 	return fmt.Sprintf("%dm left", m)
+}
+
+// ---- Persisted state (state.json — resuming a timer across a restart) ----
+
+// PersistedState is the on-disk snapshot of State written to state.json on
+// every state change (Controller.apply) so a restart can resume an
+// in-progress timer instead of always coming up Off. It's a separate type
+// from State rather than State itself because it also carries TimerIndex,
+// which State doesn't (that's Cycle's position in Config.TimerList, needed
+// to resume cycling from the right spot, but meaningless outside the
+// Controller); PresetActive/PresetSeconds aren't needed here since apply
+// re-derives them from TimerIndex the same way every other caller does.
+type PersistedState struct {
+	Active     bool      `json:"active"`
+	Indefinite bool      `json:"indefinite"`
+	ExpiresAt  time.Time `json:"expiresAt"`
+	Mode       Mode      `json:"mode"`
+	TimerIndex int       `json:"timerIndex"`
+}
+
+// String renders a PersistedState for logging (state.json read/write).
+func (s PersistedState) String() string {
+	return fmt.Sprintf("active=%v indefinite=%v mode=%s expiresAt=%s timerIndex=%d",
+		s.Active, s.Indefinite, s.Mode, s.ExpiresAt.Format(time.RFC3339), s.TimerIndex)
 }
 
 // ---- Controller: owns both config and runtime state ----
@@ -345,15 +370,59 @@ func (c *Controller) apply(d time.Duration, indefinite bool, mode Mode) {
 		PresetSeconds: presetSeconds,
 	}
 	state := c.state
+	timerIndex := c.timerIndex
 	listeners := append([]func(State){}, c.stListeners...)
 	cfg := c.cfg
 	c.mu.Unlock()
 
 	_ = power.Apply(active, cfg.KeepDisplayOn)
 
+	saveState(PersistedState{ // store.go
+		Active:     state.Active,
+		Indefinite: state.Indefinite,
+		ExpiresAt:  state.ExpiresAt,
+		Mode:       state.Mode,
+		TimerIndex: timerIndex,
+	})
+
 	for _, l := range listeners {
 		l(state)
 	}
+}
+
+// RestoreState loads the timer state a previous run persisted to
+// state.json (see saveState in store.go, called from apply above) and
+// resumes it if it's still valid: an indefinite timer resumes as-is, and a
+// running timer resumes with whatever time is left, judged against the
+// wall clock — ExpiresAt is an absolute time, so this doesn't need to know
+// how long the process was down for. A timer whose ExpiresAt already
+// passed while mugcup was closed is left Off instead of firing retroactively.
+//
+// Call this once, right after NewController and before anything else
+// touches the Controller (main.go does) — like any other state change, it
+// fires OnStateChange listeners and applies power state, and callers such
+// as the tray build their initial menu/icon from Controller.State().
+func (c *Controller) RestoreState() {
+	saved, ok := loadState() // store.go
+	if !ok || !saved.Active {
+		return
+	}
+
+	c.mu.Lock()
+	c.timerIndex = saved.TimerIndex
+	c.mu.Unlock()
+
+	if saved.Indefinite {
+		c.apply(0, true, saved.Mode)
+		return
+	}
+
+	remaining := time.Until(saved.ExpiresAt)
+	if remaining <= 0 {
+		logger.Println("Saved timer had already expired while mugcup was closed; staying Off.")
+		return
+	}
+	c.apply(remaining, false, saved.Mode)
 }
 
 // ParseDuration parses input like "1h30m", "45m".

@@ -148,6 +148,7 @@ func main() {
 	// subsystem), which also already falls back to defaults on its own.
 	cfg, _ := settings.LoadConfig()
 	ctrl := settings.NewController(cfg)
+	ctrl.RestoreState()
 	i18n.SetLang(cfg.Language)
 
 	// Self-heal the auto-start registry entry on every launch (in case it
