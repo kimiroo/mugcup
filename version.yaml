@@ -6,7 +6,7 @@
 
 # Semantic version (no leading "v"). Bump this as part of cutting a release;
 # build.ps1's -Version flag can still override it for one-off builds.
-version: 0.0.5-beta
+version: 0.1.0
 
 # Which update channel this build belongs to - decides which GitHub release
 # tags self-update will even consider (see channelRank in src/update/update.go).
@@ -18,4 +18,4 @@ version: 0.0.5-beta
 #   dev    - unreleased/local builds; self-update is disabled outright,
 #            same as today's Version == "dev" sentinel (not part of the
 #            rank above - it never lists releases in the first place)
-variant: beta
+variant: stable
