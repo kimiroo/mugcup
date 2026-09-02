@@ -53,6 +53,13 @@ memory in Settings.
 - **Keep display on** — also block the screen from turning off, not just sleep.
 - **Settings** / **About** (version info, manual "Check for Updates") / **Quit**.
 
+The tray icon itself tells you what's active, at a glance:
+
+- <img src="assets/screenshot/tray-icon-off.png" width="28" valign="middle"> Off
+- <img src="assets/screenshot/tray-icon-indefinite.png" width="28" valign="middle"> Indefinite
+- <img src="assets/screenshot/tray-icon-timer.png" width="28" valign="middle"> Preset / Custom duration
+- <img src="assets/screenshot/tray-icon-schedule.png" width="28" valign="middle"> Custom until a time
+
 ### Custom timers
 
 One window, two tabs — run for a duration (`1h30m`, `45m`, …) or until an
