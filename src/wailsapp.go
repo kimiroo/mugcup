@@ -77,7 +77,7 @@ var viewSpecs = map[windowView]viewSpec{
 	viewCustom:   {titleKey: "window.title.custom", width: 400, height: 340, minHeight: 300, maxHeight: 460},
 	// About's shared header is hidden for this view (app.js's showView), so
 	// its content is shorter than the other views' by roughly that much.
-	viewAbout: {titleKey: "window.title.about", width: 360, height: 310, minHeight: 280, maxHeight: 340},
+	viewAbout: {titleKey: "window.title.about", width: 360, height: 410, minHeight: 280, maxHeight: 440},
 }
 
 // App is the Wails-bound backend for the popup window. Every method here is

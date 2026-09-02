@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="215 245 640 640" width="1024px" height="1024px">
+  <defs>
+    <filter id="outerDropShadow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.85" /></filter>
+    <clipPath id="cupBodyClip"><path d="M 277.34,386.647 L 277.34,700 C 277.34,746.944 366.883,785 477.34,785 C 587.797,785 677.34,746.944 677.34,700 L 677.34,386.647" /></clipPath>
+    <clipPath id="handleClip"><path d="M 676.34,410.03 C 676.34,417.216 681.78,423.235 688.93,423.959 C 752.764,430.421 801.34,484.163 801.34,548.323 C 801.34,612.484 752.764,666.226 688.93,672.688 C 681.78,673.412 676.34,679.431 676.34,686.617 L 676.34,612.55 C 676.34,615.471 677.617,618.245 679.836,620.145 C 682.054,622.045 684.992,622.88 687.878,622.431 C 724.405,616.743 751.34,585.29 751.34,548.323 C 751.34,511.357 724.405,479.904 687.878,474.216 C 684.992,473.767 682.054,474.602 679.836,476.502 C 677.617,478.402 676.34,481.176 676.34,484.097 Z" /></clipPath>
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E1E6EB"/><stop offset="20%" stop-color="#FFFFFF"/>
+      <stop offset="45%" stop-color="#F4F7F9"/><stop offset="80%" stop-color="#E2E7EC"/><stop offset="100%" stop-color="#CBD2DA"/>
+    </linearGradient>
+    <linearGradient id="bodyVerticalShadow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.4"/>
+      <stop offset="70%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#808C99" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="40%" stop-color="#F8FAFC"/>
+      <stop offset="80%" stop-color="#E0E6EC"/><stop offset="100%" stop-color="#C5CBD3"/>
+    </linearGradient>
+    <linearGradient id="innerDepthGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#929CA8"/><stop offset="40%" stop-color="#A7B1BC"/><stop offset="100%" stop-color="#BEC7D3"/>
+    </linearGradient>
+    <radialGradient id="coffeeGrad" cx="38%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#7A3F28"/><stop offset="50%" stop-color="#4E281A"/>
+      <stop offset="85%" stop-color="#2E170F"/><stop offset="100%" stop-color="#1B0C07"/>
+    </radialGradient>
+    <linearGradient id="handleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/><stop offset="30%" stop-color="#EBF0F5"/>
+      <stop offset="70%" stop-color="#C8CFD7"/><stop offset="100%" stop-color="#A2AAB4"/>
+    </linearGradient>
+    <radialGradient id="handleSelfShadow" cx="60%" cy="65%" r="55%">
+      <stop offset="50%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="85%" stop-color="#55606E" stop-opacity="0.12"/><stop offset="100%" stop-color="#3A434E" stop-opacity="0.22"/>
+    </radialGradient>
+    <linearGradient id="handleInsideShadow" x1="100%" y1="0%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.08"/>
+      <stop offset="8%" stop-color="#000000" stop-opacity="0.02"/><stop offset="20%" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="softBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <g filter="url(#outerDropShadow)">
+    <path d="M 676.34,410.03 C 676.34,417.216 681.78,423.235 688.93,423.959 C 752.764,430.421 801.34,484.163 801.34,548.323 C 801.34,612.484 752.764,666.226 688.93,672.688 C 681.78,673.412 676.34,679.431 676.34,686.617 L 676.34,612.55 C 676.34,615.471 677.617,618.245 679.836,620.145 C 682.054,622.045 684.992,622.88 687.878,622.431 C 724.405,616.743 751.34,585.29 751.34,548.323 C 751.34,511.357 724.405,479.904 687.878,474.216 C 684.992,473.767 682.054,474.602 679.836,476.502 C 677.617,478.402 676.34,481.176 676.34,484.097 Z" fill="url(#handleGrad)"/>
+    <path d="M 676.34,410.03 C 676.34,417.216 681.78,423.235 688.93,423.959 C 752.764,430.421 801.34,484.163 801.34,548.323 C 801.34,612.484 752.764,666.226 688.93,672.688 C 681.78,673.412 676.34,679.431 676.34,686.617 L 676.34,612.55 C 676.34,615.471 677.617,618.245 679.836,620.145 C 682.054,622.045 684.992,622.88 687.878,622.431 C 724.405,616.743 751.34,585.29 751.34,548.323 C 751.34,511.357 724.405,479.904 687.878,474.216 C 684.992,473.767 682.054,474.602 679.836,476.502 C 677.617,478.402 676.34,481.176 676.34,484.097 Z" fill="url(#handleSelfShadow)" clip-path="url(#handleClip)" />
+    <path d="M 676.34,410.03 C 676.34,417.216 681.78,423.235 688.93,423.959 C 752.764,430.421 801.34,484.163 801.34,548.323 C 801.34,612.484 752.764,666.226 688.93,672.688 C 681.78,673.412 676.34,679.431 676.34,686.617 L 676.34,612.55 C 676.34,615.471 677.617,618.245 679.836,620.145 C 682.054,622.045 684.992,622.88 687.878,622.431 C 724.405,616.743 751.34,585.29 751.34,548.323 C 751.34,511.357 724.405,479.904 687.878,474.216 C 684.992,473.767 682.054,474.602 679.836,476.502 C 677.617,478.402 676.34,481.176 676.34,484.097 Z" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.6" clip-path="url(#handleClip)" />
+    <path d="M 277.34,386.647 L 277.34,700 C 277.34,746.944 366.883,785 477.34,785 C 587.797,785 677.34,746.944 677.34,700 L 677.34,386.647" fill="url(#bodyGrad)"/>
+    <path d="M 277.34,386.647 L 277.34,700 C 277.34,746.944 366.883,785 477.34,785 C 587.797,785 677.34,746.944 677.34,700 L 677.34,386.647" fill="url(#bodyVerticalShadow)"/>
+    <path d="M 277.34,386.647 L 277.34,700 C 277.34,746.944 366.883,785 477.34,785 C 587.797,785 677.34,746.944 677.34,700 L 677.34,386.647" fill="url(#handleInsideShadow)" clip-path="url(#cupBodyClip)"/>
+    <path d="M 305.34,396.647 Q 312.34,543.323 305.34,690" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" opacity="0.3" filter="url(#softBlur)" clip-path="url(#cupBodyClip)"/>
+    <ellipse cx="477.34" cy="386.647" rx="200" ry="55" fill="url(#rimGrad)"/>
+    <ellipse cx="477.34" cy="386.647" rx="163" ry="34.865" fill="url(#innerDepthGrad)"/>
+        <path d="M 329.011,401.103 C 355.491,388.671 413.473,380.693 477.34,380.693 C 541.207,380.693 599.189,388.671 625.669,401.103 C 599.189,413.534 541.207,421.512 477.34,421.512 C 413.473,421.512 355.491,413.534 329.011,401.103 Z" fill="url(#coffeeGrad)"/>
+    <ellipse cx="442.34" cy="398.647" rx="73.35" ry="12.203" fill="#FFFFFF" opacity="0.16" transform="rotate(-8 442.34 398.647)" />
+  </g>
+</svg>

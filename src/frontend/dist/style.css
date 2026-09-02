@@ -68,9 +68,18 @@ html, body {
 }
 
 .head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.2px;
+}
+
+.head-logo {
+  display: block;
+  width: 36px;
+  height: 36px;
 }
 
 .card {
@@ -141,6 +150,12 @@ html, body {
 .about-card {
   text-align: center;
   padding: 24px 14px;
+}
+
+.about-logo {
+  width: 96px;
+  height: 96px;
+  margin: 0 0 10px;
 }
 
 .about-title {
