@@ -235,13 +235,13 @@ func runOnMainThreadVoid(app *walk.Application, fn func()) {
 }
 
 func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.Request) ipc.Response {
-	// -d/--display-on, --auto-start, --auto-update-check, and
-	// --auto-update-apply are global options applied before dispatching to
-	// the actual command, regardless of which command it is (and are the
-	// only thing the standalone "set" command does). They persist
-	// independently of an active timer, unlike -d's on-screen effect which
-	// only actually applies while a timer is running.
-	if req.DisplayOn != nil || req.AutoStart != nil || req.AutoUpdateCheck != nil || req.AutoUpdateApply != nil {
+	// -d/--display-on, --auto-start, --auto-update-check, --auto-update-apply,
+	// and --language are global options applied before dispatching to the
+	// actual command, regardless of which command it is (and are the only
+	// thing the standalone "set" command does). They persist independently
+	// of an active timer, unlike -d's on-screen effect which only actually
+	// applies while a timer is running.
+	if req.DisplayOn != nil || req.AutoStart != nil || req.AutoUpdateCheck != nil || req.AutoUpdateApply != nil || req.Language != nil {
 		cfg := ctrl.Config()
 		changed := false
 		if req.DisplayOn != nil && cfg.KeepDisplayOn != *req.DisplayOn {
@@ -258,6 +258,10 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 		}
 		if req.AutoUpdateApply != nil && cfg.AutoUpdateApply != *req.AutoUpdateApply {
 			cfg.AutoUpdateApply = *req.AutoUpdateApply
+			changed = true
+		}
+		if req.Language != nil && cfg.Language != *req.Language {
+			cfg.Language = *req.Language
 			changed = true
 		}
 		if changed {

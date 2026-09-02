@@ -22,15 +22,16 @@ type options struct {
 	autoStart       *bool
 	autoUpdateCheck *bool
 	autoUpdateApply *bool
-	yes             bool   // -y/--yes: skip the "update" command's [y/N] confirmation
-	noUpdate        bool   // --no-update: only consumed by "launch" (see runLaunch)
-	output          string // "text" (default) or "json"
+	language        *string // "auto", "en", or "ko" — see mugcup/i18n on the GUI side
+	yes             bool    // -y/--yes: skip the "update" command's [y/N] confirmation
+	noUpdate        bool    // --no-update: only consumed by "launch" (see runLaunch)
+	output          string  // "text" (default) or "json"
 }
 
 // hasSetting reports whether any settings-only option was given, for
 // validating the standalone "set" command has something to do.
 func (o options) hasSetting() bool {
-	return o.displayOn != nil || o.autoStart != nil || o.autoUpdateCheck != nil || o.autoUpdateApply != nil
+	return o.displayOn != nil || o.autoStart != nil || o.autoUpdateCheck != nil || o.autoUpdateApply != nil || o.language != nil
 }
 
 // asRequest carries this options' settings-only fields into a Request,
@@ -41,6 +42,7 @@ func (o options) asRequest() Request {
 		AutoStart:       o.autoStart,
 		AutoUpdateCheck: o.autoUpdateCheck,
 		AutoUpdateApply: o.autoUpdateApply,
+		Language:        o.language,
 	}
 }
 
@@ -58,7 +60,8 @@ Commands:
   start preset <n>         Start the n-th preset from the configured list (0-based)
   stop                     Turn off the timer and keep-on
   set                      Change settings that aren't tied to a running timer (see Options below).
-                            Requires at least one of -d, --auto-start, --auto-update-check, --auto-update-apply
+                            Requires at least one of -d, --auto-start, --auto-update-check,
+                            --auto-update-apply, --language
   config                   Show the current config
   settings                 Open the settings window
   status                   Show the current status
@@ -77,6 +80,8 @@ Options:
   --auto-update-check <true|false>   Automatically check for updates
   --auto-update-apply <true|false>   Install a found update without asking (only takes effect if
                                       auto-update-check is also on)
+  --language <auto|en|ko>          Set the GUI's display language (tray menu, popup window, dialogs).
+                                    Doesn't affect mugcup-cli's own output, which stays English-only
   -y, --yes                       Skip the "update" command's [y/N] confirmation
   --no-update                     With "launch": start mugcup without its startup auto-update check
   -o, --output <text|json>        Output format. start/stop/set/status/config/export/import
@@ -89,6 +94,7 @@ Examples:
   mugcup-cli start preset 0
   mugcup-cli start indefinite -d true
   mugcup-cli set --auto-start true --auto-update-apply false
+  mugcup-cli set --language ko
   mugcup-cli status -o json
   mugcup-cli export config.json
   mugcup-cli update
@@ -97,8 +103,54 @@ Examples:
 `)
 }
 
+// supportedLanguages are the values --language accepts, in the same order
+// mugcup/i18n ships catalogs for.
+var supportedLanguages = []string{"auto", "en", "ko"}
+
+func isSupportedLanguage(v string) bool {
+	for _, s := range supportedLanguages {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// failUnsupportedLanguage rejects an unrecognized --language value and exits,
+// listing the supported codes — as JSON on stdout (opts.output == "json", to
+// match printResult's failure shape) or plain text on stderr otherwise. opts
+// is passed by value with output already resolved by outputFormat below, so
+// this works regardless of where --language falls relative to -o/--output.
+func failUnsupportedLanguage(opts options, got string) {
+	if opts.output == "json" {
+		printJSON(map[string]any{
+			"success":            false,
+			"message":            fmt.Sprintf("unsupported language: %s", got),
+			"supportedLanguages": supportedLanguages,
+		})
+		os.Exit(1)
+	}
+	fail("unsupported language: %s\nSupported languages: %s", got, strings.Join(supportedLanguages, ", "))
+}
+
+// outputFormat pre-scans args for -o/--output so its value is known even
+// when --language (which validates and can exit immediately) appears before
+// it on the command line. Invalid or missing values fall back to "text" —
+// parseOptions' own loop below still catches and reports those properly.
+func outputFormat(args []string) string {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "-o" || args[i] == "--output" {
+			v := strings.ToLower(args[i+1])
+			if v == "text" || v == "json" {
+				return v
+			}
+		}
+	}
+	return "text"
+}
+
 func parseOptions(args []string) (options, []string, error) {
-	opts := options{output: "text"}
+	opts := options{output: outputFormat(args)}
 	var positional []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -143,6 +195,16 @@ func parseOptions(args []string) (options, []string, error) {
 				return opts, nil, fmt.Errorf("invalid value for %s: %s", a, args[i])
 			}
 			opts.autoUpdateApply = &v
+		case "--language":
+			if i+1 >= len(args) {
+				return opts, nil, fmt.Errorf("%s requires an auto/en/ko value", a)
+			}
+			i++
+			v := strings.ToLower(args[i])
+			if !isSupportedLanguage(v) {
+				failUnsupportedLanguage(opts, args[i])
+			}
+			opts.language = &v
 		case "-o", "--output":
 			if i+1 >= len(args) {
 				return opts, nil, fmt.Errorf("%s requires a text/json value", a)
@@ -282,7 +344,7 @@ func main() {
 
 	case "set":
 		if !opts.hasSetting() {
-			fail("set requires at least one of: -d/--display-on, --auto-start, --auto-update-check, --auto-update-apply.\nRun 'mugcup-cli help' for usage.")
+			fail("set requires at least one of: -d/--display-on, --auto-start, --auto-update-check, --auto-update-apply, --language.\nRun 'mugcup-cli help' for usage.")
 		}
 		req := opts.asRequest()
 		req.Command = "set"

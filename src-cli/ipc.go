@@ -24,6 +24,7 @@ type Request struct {
 	AutoStart       *bool    `json:"autoStart,omitempty"`
 	AutoUpdateCheck *bool    `json:"autoUpdateCheck,omitempty"`
 	AutoUpdateApply *bool    `json:"autoUpdateApply,omitempty"`
+	Language        *string  `json:"language,omitempty"`
 	ConfigJSON      string   `json:"configJson,omitempty"`
 }
 
@@ -43,7 +44,7 @@ type ConfigPayload struct {
 	AutoUpdateApply bool   `json:"autoUpdateApply"`
 	TimerList       []int  `json:"timerList"`
 	TrayClickAction string `json:"trayClickAction"`
-	Language        string `json:"language"` // GUI-only setting; the CLI has no --language equivalent
+	Language        string `json:"language"` // "auto", "en", or "ko" — see mugcup/i18n
 }
 
 type UpdatePayload struct {

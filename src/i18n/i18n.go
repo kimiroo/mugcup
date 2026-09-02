@@ -1,7 +1,9 @@
 // Package i18n is mugcup's GUI-only translation catalog (tray menu, popup
-// window, native dialogs). mugcup-cli deliberately has no equivalent — its
-// own interface (help text, command output) stays English-only regardless
-// of the GUI's language.
+// window, native dialogs). mugcup-cli can set which of these locales is
+// active (via "set --language" and "launch --language", forwarded over IPC
+// as Request.Language), but has no catalog of its own — its own interface
+// (help text, command output) stays English-only regardless of the GUI's
+// language.
 package i18n
 
 import (

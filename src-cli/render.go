@@ -77,6 +77,20 @@ func formatTrayClickAction(action string) string {
 	return action
 }
 
+var languageLabels = map[string]string{
+	"":     "Auto",
+	"auto": "Auto",
+	"en":   "English",
+	"ko":   "Korean",
+}
+
+func formatLanguage(lang string) string {
+	if label, ok := languageLabels[lang]; ok {
+		return label
+	}
+	return lang
+}
+
 func renderStatusText(s *StatusPayload) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Mode: %s\n", formatMode(s.Mode))
@@ -97,6 +111,7 @@ func renderConfigText(c *ConfigPayload) string {
 	fmt.Fprintf(&b, "Auto update check: %s\n", formatYesNo(c.AutoUpdateCheck))
 	fmt.Fprintf(&b, "Auto update apply: %s\n", formatYesNo(c.AutoUpdateApply))
 	fmt.Fprintf(&b, "Presets: %s\n", strings.Join(presets, ", "))
-	fmt.Fprintf(&b, "Tray click action: %s", formatTrayClickAction(c.TrayClickAction))
+	fmt.Fprintf(&b, "Tray click action: %s\n", formatTrayClickAction(c.TrayClickAction))
+	fmt.Fprintf(&b, "Language: %s", formatLanguage(c.Language))
 	return b.String()
 }

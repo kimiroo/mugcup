@@ -64,8 +64,8 @@ func runLaunch(opts options) Response {
 }
 
 // applySettingsOnly makes one more IPC call after launch when -d, --auto-start,
-// --auto-update-check, or --auto-update-apply was given, so "launch with
-// these settings" works in one command.
+// --auto-update-check, --auto-update-apply, or --language was given, so
+// "launch with these settings" works in one command.
 func applySettingsOnly(opts options, fallback Response) Response {
 	if !opts.hasSetting() {
 		return fallback
