@@ -83,6 +83,7 @@ var messagesEN = map[string]string{
 	"ui.common.off":          "Off",
 	"ui.common.time_left_hm": "%dh %dm left",
 	"ui.common.time_left_m":  "%dm left",
+	"ui.common.until":        "until %s",
 
 	"ui.preset.empty":        "No presets yet — add one below.",
 	"ui.preset.drag_title":   "Drag to reorder",

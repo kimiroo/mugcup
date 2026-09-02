@@ -44,6 +44,9 @@ type StatusPayload struct {
 	RemainingSec   int    `json:"remainingSec"`
 	RemainingLabel string `json:"remainingLabel"`
 	KeepDisplayOn  bool   `json:"keepDisplayOn"`
+	// Until is the Schedule target as RFC3339, alongside RemainingSec rather
+	// than instead of it — set only when Mode is "schedule" and Active.
+	Until string `json:"until,omitempty"`
 }
 
 type ConfigPayload struct {

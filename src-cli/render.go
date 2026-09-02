@@ -94,6 +94,9 @@ func formatLanguage(lang string) string {
 func renderStatusText(s *StatusPayload) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Mode: %s\n", formatMode(s.Mode))
+	if s.Until != "" {
+		fmt.Fprintf(&b, "Until: %s\n", s.Until)
+	}
 	fmt.Fprintf(&b, "Remaining: %s\n", formatRemaining(s.Active, s.Indefinite, s.RemainingSec))
 	fmt.Fprintf(&b, "Keep display on: %s", formatYesNo(s.KeepDisplayOn))
 	return b.String()

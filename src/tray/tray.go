@@ -237,6 +237,9 @@ func remainingLabel(s settings.State) string {
 	if s.Indefinite {
 		return i18n.T("ui.common.indefinite")
 	}
+	if s.Mode == settings.ModeSchedule {
+		return fmt.Sprintf(i18n.T("ui.common.until"), settings.FormatUntil(s.ExpiresAt))
+	}
 	remaining := time.Until(s.ExpiresAt)
 	if remaining < 0 {
 		remaining = 0

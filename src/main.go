@@ -433,6 +433,10 @@ func statusPayload(ctrl *settings.Controller) *ipc.StatusPayload {
 			remainingSec = remaining
 		}
 	}
+	until := ""
+	if st.Active && !st.Indefinite && st.Mode == settings.ModeSchedule {
+		until = st.ExpiresAt.Format(time.RFC3339)
+	}
 	return &ipc.StatusPayload{
 		Active:         st.Active,
 		Indefinite:     st.Indefinite,
@@ -440,6 +444,7 @@ func statusPayload(ctrl *settings.Controller) *ipc.StatusPayload {
 		RemainingSec:   remainingSec,
 		RemainingLabel: st.RemainingLabel(),
 		KeepDisplayOn:  ctrl.Config().KeepDisplayOn,
+		Until:          until,
 	}
 }
 

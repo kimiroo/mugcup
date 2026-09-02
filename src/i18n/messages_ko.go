@@ -82,6 +82,7 @@ var messagesKO = map[string]string{
 	"ui.common.off":          "꺼짐",
 	"ui.common.time_left_hm": "%d시간 %d분 남음",
 	"ui.common.time_left_m":  "%d분 남음",
+	"ui.common.until":        "%s까지",
 
 	"ui.preset.empty":        "아직 프리셋이 없습니다 — 아래에서 추가하세요.",
 	"ui.preset.drag_title":   "드래그하여 순서 변경",

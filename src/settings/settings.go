@@ -116,12 +116,20 @@ type State struct {
 	PresetSeconds int
 }
 
+// RemainingLabel renders State for display. A Schedule timer ("until a date
+// & time") shows its target instead of a countdown, since that's what the
+// user actually picked; every other active state (preset, custom duration)
+// still counts down, since those were specified as a duration in the first
+// place.
 func (s State) RemainingLabel() string {
 	if !s.Active {
 		return "Off"
 	}
 	if s.Indefinite {
 		return "Indefinite"
+	}
+	if s.Mode == ModeSchedule {
+		return "Until " + FormatUntil(s.ExpiresAt)
 	}
 	remaining := time.Until(s.ExpiresAt)
 	if remaining < 0 {
@@ -133,6 +141,28 @@ func (s State) RemainingLabel() string {
 		return fmt.Sprintf("%dh %dm left", h, m)
 	}
 	return fmt.Sprintf("%dm left", m)
+}
+
+// FormatUntil renders t as a Schedule target: just the clock time when t
+// falls on today, or date-and-time when it doesn't, so a schedule that
+// crosses midnight isn't misread as today. Both use the OS locale's own
+// format (localDate/localTime, localetime.go) where available, falling
+// back to a fixed ISO-like layout ("15:04" / "2006-01-02 15:04") if that
+// Windows API call fails.
+func FormatUntil(t time.Time) string {
+	now := time.Now()
+	if t.Year() == now.Year() && t.YearDay() == now.YearDay() {
+		if s, ok := localTime(t); ok {
+			return s
+		}
+		return t.Format("15:04")
+	}
+	if dateStr, ok := localDate(t); ok {
+		if timeStr, ok := localTime(t); ok {
+			return dateStr + " " + timeStr
+		}
+	}
+	return t.Format("2006-01-02 15:04")
 }
 
 // ---- Persisted state (state.json — resuming a timer across a restart) ----
