@@ -79,21 +79,21 @@ Commands:
   help                     Show this help
 
 Options:
-  -d, --display-on <true|false>   Also keep the display on. Persists; unlike the others, only has an
-                                   on-screen effect while a timer is running (omit to keep the current setting)
-  --auto-start <true|false>       Start mugcup automatically with Windows
+  -d, --display-on <true|false>      Also keep the display on. Persists; unlike the others, only has an
+                                     on-screen effect while a timer is running (omit to keep the current setting)
+  --auto-start <true|false>          Start mugcup automatically with Windows
   --auto-update-check <true|false>   Automatically check for updates
   --auto-update-apply <true|false>   Install a found update without asking (only takes effect if
-                                      auto-update-check is also on)
-  --language <auto|en|ko>          Set the GUI's display language (tray menu, popup window, dialogs).
-                                    Doesn't affect mugcup-cli's own output, which stays English-only
+                                     auto-update-check is also on)
+  --language <auto|en|ko>            Set the GUI's display language (tray menu, popup window, dialogs).
+                                     Doesn't affect mugcup-cli's own output, which stays English-only
   --tray-click-action <cycle|indefinite|menu>
-                                   What a tray left-click does: cycle through presets, toggle
-                                   indefinite keep-on, or just open the tray menu
-  -y, --yes                       Skip the "update" command's [y/N] confirmation
-  --no-update                     With "launch": start mugcup without its startup auto-update check
-  -o, --output <text|json>        Output format. start/stop/set/status/config/export/import
-                                   print the result as multiple lines (text) or just that value (json)
+                                     What a tray left-click does: cycle through presets, toggle
+                                     indefinite keep-on, or just open the tray menu
+  -y, --yes                          Skip the "update" command's [y/N] confirmation
+  --no-update                        With "launch": start mugcup without its startup auto-update check
+  -o, --output <text|json>           Output format. start/stop/set/status/config/export/import
+                                     print the result as multiple lines (text) or just that value (json)
 
 Examples:
   mugcup-cli launch
@@ -481,7 +481,11 @@ func runImport(opts options, positional []string) {
 func runUpdate(opts options) {
 	req := opts.asRequest()
 	req.Command = "update"
-	resp, ok := sendToRunningInstance(req)
+	// mugcup.exe's "update" handler makes a real GitHub API call before
+	// responding, so it needs updateTimeout's longer budget rather than the
+	// default commandTimeout (fine for every other command, which mugcup.exe
+	// answers purely from local state).
+	resp, ok := sendToRunningInstanceTimeout(req, updateTimeout)
 	if !ok {
 		fail(notRunningMsg)
 	}

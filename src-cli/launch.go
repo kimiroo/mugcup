@@ -13,7 +13,24 @@ const (
 	launchReadyTimeout = 5 * time.Second
 	stopTimeout        = 5 * time.Second
 	pollInterval       = 100 * time.Millisecond
+
+	// readyRoundTripTimeout is appReady's per-attempt budget (dialTimeout,
+	// shared with the rest of ipc.go, covers the connect itself) — short so
+	// waitUntil's polling loop below gets many fast tries across
+	// launchReadyTimeout instead of a few slow ones.
+	readyRoundTripTimeout = 150 * time.Millisecond
 )
+
+// appReady reports whether mugcup.exe can actually service a request right
+// now, not just whether its listener accepts a TCP connection (isRunning) —
+// on a cold start, the app's message loop can lag a connect-able listener
+// by a couple of seconds (disk cache, AV scanning a freshly built exe, ...),
+// and declaring "launch" done too early is exactly what let the immediately-
+// following command in this bug report get connection-reset.
+func appReady() bool {
+	_, ok, ioErr := sendOnce(Request{Command: "status"}, readyRoundTripTimeout)
+	return ok && ioErr == nil
+}
 
 // guiExecutablePath finds mugcup.exe next to mugcup-cli.exe — build output
 // always places both in the same folder (build/<arch>/).
@@ -56,7 +73,7 @@ func runLaunch(opts options) Response {
 	// The child is an independent tray app; don't wait for it to exit.
 	_ = cmd.Process.Release()
 
-	if !waitUntil(launchReadyTimeout, pollInterval, isRunning) {
+	if !waitUntil(launchReadyTimeout, pollInterval, appReady) {
 		return Response{Success: false, Message: "could not confirm mugcup started (timed out)."}
 	}
 

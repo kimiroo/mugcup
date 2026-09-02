@@ -61,6 +61,24 @@ type Response struct {
 	Update  *UpdatePayload `json:"update,omitempty"`
 }
 
+const (
+	// dialTimeout bounds just the TCP connect: on loopback it either
+	// connects or gets refused near-instantly, so this only matters as a
+	// ceiling on how long a wedged attempt can block — short lets a caller
+	// retry fast instead of waiting on it.
+	dialTimeout = 50 * time.Millisecond
+
+	// commandTimeout is the default per-attempt round-trip budget for a
+	// command mugcup.exe answers purely from local state (status, config,
+	// set, exit, ...). updateTimeout is for "update" specifically, whose
+	// server-side handling makes a real network call to GitHub's API and
+	// so needs real patience — see runUpdate.
+	commandTimeout = 2 * time.Second
+	updateTimeout  = 15 * time.Second
+
+	retryBackoff = 100 * time.Millisecond
+)
+
 func portFilePath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -85,7 +103,7 @@ func dialRunningInstance() (net.Conn, bool) {
 	if err != nil || port <= 0 {
 		return nil, false
 	}
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 1*time.Second)
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), dialTimeout)
 	if err != nil {
 		return nil, false
 	}
@@ -100,25 +118,55 @@ func isRunning() bool {
 	return ok
 }
 
-// sendToRunningInstance sends req to a running mugcup.exe. ok=false means no
-// running instance was found.
-func sendToRunningInstance(req Request) (resp Response, ok bool) {
+// sendOnce is one dial+send+receive attempt against timeout (the round-trip
+// budget after connecting; dialTimeout governs the connect itself). ok=false
+// means no running instance was found; ioErr is the raw error behind
+// resp.Message (nil on success or when ok=false), for sendToRunningInstance
+// to decide whether a retry is worth it.
+func sendOnce(req Request, timeout time.Duration) (resp Response, ok bool, ioErr error) {
 	conn, found := dialRunningInstance()
 	if !found {
-		return Response{}, false
+		return Response{}, false, nil
 	}
 	defer conn.Close()
-	// Bound the wait so a non-responsive instance can't block forever.
-	_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
-		return Response{Success: false, Message: "failed to send the command to the running mugcup: " + describeIOError(err)}, true
+		return Response{Success: false, Message: "failed to send the command to the running mugcup: " + describeIOError(err)}, true, err
 	}
 
 	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
-		return Response{Success: false, Message: "did not get a response from the running mugcup: " + describeIOError(err)}, true
+		return Response{Success: false, Message: "did not get a response from the running mugcup: " + describeIOError(err)}, true, err
 	}
-	return resp, true
+	return resp, true, nil
+}
+
+// sendToRunningInstance sends req with the default commandTimeout. ok=false
+// means no running instance was found.
+func sendToRunningInstance(req Request) (Response, bool) {
+	return sendToRunningInstanceTimeout(req, commandTimeout)
+}
+
+// sendToRunningInstanceTimeout is sendToRunningInstance with a caller-chosen
+// round-trip budget per attempt (see updateTimeout). A fast connection-level
+// failure (a reset, a dropped connection — anything but a timeout) gets a
+// couple of quick retries before giving up: the very first connection into
+// mugcup.exe can transiently reset right around when it finishes starting
+// up (see runLaunch) or shuts down, a Windows loopback quirk rather than
+// anything wrong with the request itself.
+func sendToRunningInstanceTimeout(req Request, timeout time.Duration) (resp Response, ok bool) {
+	for attempt := 0; ; attempt++ {
+		var ioErr error
+		resp, ok, ioErr = sendOnce(req, timeout)
+		if ioErr == nil || !ok {
+			return resp, ok
+		}
+		var netErr net.Error
+		if attempt >= 2 || (errors.As(ioErr, &netErr) && netErr.Timeout()) {
+			return resp, ok
+		}
+		time.Sleep(retryBackoff)
+	}
 }
 
 // describeIOError distinguishes why a send/receive failed (timeout, dropped
