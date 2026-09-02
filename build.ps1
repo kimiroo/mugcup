@@ -128,22 +128,29 @@ foreach ($architecture in $Architectures) {
     }
 }
 
+Write-Host "Architectures: $($Architectures -join ', ')"
+
 $previousGoOS = $env:GOOS
 $previousGoArch = $env:GOARCH
 try {
     $env:GOOS = "windows"
     foreach ($architecture in $Architectures) {
         $outputDir = Join-Path $buildRoot $architecture
-        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 
         # Go calls 32-bit x86 "386"; keep the output folder name as "x86".
-        $env:GOARCH = $goArchitectures[$architecture]
+        $goArch = $goArchitectures[$architecture]
+        Write-Host ""
+        Write-Host "=== $architecture (GOARCH=$goArch) -> $outputDir ==="
+
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+        $env:GOARCH = $goArch
 
         # ---- GUI build (src) ----
         Push-Location $guiSourceRoot
         try {
             # "desktop,production" are required by Wails v2 to select the
             # real desktop frontend and disable the dev inspector/console.
+            Write-Host "  Building GUI: mugcup.exe"
             $guiOutputPath = Join-Path $outputDir "mugcup.exe"
             go build -tags "desktop,production" -ldflags "-H=windowsgui -s -w $versionLdflags" -o $guiOutputPath .
             if ($LASTEXITCODE -ne 0) {
@@ -157,6 +164,7 @@ try {
         Push-Location $cliSourceRoot
         try {
             # Go's default subsystem on Windows is console.
+            Write-Host "  Building CLI: mugcup-cli.exe"
             $cliOutputPath = Join-Path $outputDir "mugcup-cli.exe"
             go build -ldflags $versionLdflags -o $cliOutputPath .
             if ($LASTEXITCODE -ne 0) {
@@ -172,12 +180,14 @@ try {
         # zip by filename for each exe it wants to extract — so one zip per
         # architecture, containing both exes, covers self-updating either.
         if ($Version -ne "dev") {
-            $goArch = $goArchitectures[$architecture]
             $zipPath = Join-Path $buildRoot "mugcup_windows_$goArch.zip"
+            Write-Host "  Compressing: $(Split-Path -Leaf $zipPath)"
             if (Test-Path -LiteralPath $zipPath) {
                 Remove-Item -LiteralPath $zipPath -Force
             }
             Compress-Archive -Path (Join-Path $outputDir "mugcup.exe"), (Join-Path $outputDir "mugcup-cli.exe") -DestinationPath $zipPath
+        } else {
+            Write-Host "  Skipping archive (dev build)"
         }
     }
 } finally {

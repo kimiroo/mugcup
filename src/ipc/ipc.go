@@ -18,10 +18,10 @@ var logger = applog.New("ipc")
 type Request struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
-	// DisplayOn, AutoStart, AutoUpdateCheck, AutoUpdateApply, and Language
-	// are tri-state: nil=unset (keep config), non-nil=apply and persist
-	// immediately. They're accepted alongside any command (so e.g.
-	// "start 30m -d true" both starts a timer and updates the display
+	// DisplayOn, AutoStart, AutoUpdateCheck, AutoUpdateApply, Language, and
+	// TrayClickAction are tri-state: nil=unset (keep config), non-nil=apply
+	// and persist immediately. They're accepted alongside any command (so
+	// e.g. "start 30m -d true" both starts a timer and updates the display
 	// setting), and are also what the standalone "set" command uses to
 	// change settings that no other command touches.
 	DisplayOn       *bool `json:"displayOn,omitempty"`
@@ -30,6 +30,9 @@ type Request struct {
 	AutoUpdateApply *bool `json:"autoUpdateApply,omitempty"`
 	// Language is "auto", "en", or "ko" — see mugcup/i18n.Lang.
 	Language *string `json:"language,omitempty"`
+	// TrayClickAction is "cycle", "indefinite", or "menu" — see
+	// settings.TrayClickAction.
+	TrayClickAction *string `json:"trayClickAction,omitempty"`
 	// ConfigJSON carries the full config to apply for the "import" command.
 	ConfigJSON string `json:"configJson,omitempty"`
 }

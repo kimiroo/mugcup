@@ -79,7 +79,10 @@ var messagesEN = map[string]string{
 	"ui.about.check_updates":  "Check for Updates",
 	"ui.about.close":          "Close",
 
-	"ui.common.indefinite": "Indefinite",
+	"ui.common.indefinite":   "Indefinite",
+	"ui.common.off":          "Off",
+	"ui.common.time_left_hm": "%dh %dm left",
+	"ui.common.time_left_m":  "%dm left",
 
 	"ui.preset.empty":        "No presets yet — add one below.",
 	"ui.preset.drag_title":   "Drag to reorder",

@@ -236,12 +236,12 @@ func runOnMainThreadVoid(app *walk.Application, fn func()) {
 
 func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.Request) ipc.Response {
 	// -d/--display-on, --auto-start, --auto-update-check, --auto-update-apply,
-	// and --language are global options applied before dispatching to the
-	// actual command, regardless of which command it is (and are the only
-	// thing the standalone "set" command does). They persist independently
-	// of an active timer, unlike -d's on-screen effect which only actually
-	// applies while a timer is running.
-	if req.DisplayOn != nil || req.AutoStart != nil || req.AutoUpdateCheck != nil || req.AutoUpdateApply != nil || req.Language != nil {
+	// --language, and --tray-click-action are global options applied before
+	// dispatching to the actual command, regardless of which command it is
+	// (and are the only thing the standalone "set" command does). They
+	// persist independently of an active timer, unlike -d's on-screen effect
+	// which only actually applies while a timer is running.
+	if req.DisplayOn != nil || req.AutoStart != nil || req.AutoUpdateCheck != nil || req.AutoUpdateApply != nil || req.Language != nil || req.TrayClickAction != nil {
 		cfg := ctrl.Config()
 		changed := false
 		if req.DisplayOn != nil && cfg.KeepDisplayOn != *req.DisplayOn {
@@ -262,6 +262,10 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 		}
 		if req.Language != nil && cfg.Language != *req.Language {
 			cfg.Language = *req.Language
+			changed = true
+		}
+		if req.TrayClickAction != nil && string(cfg.TrayClickAction) != *req.TrayClickAction {
+			cfg.TrayClickAction = settings.TrayClickAction(*req.TrayClickAction)
 			changed = true
 		}
 		if changed {
@@ -348,13 +352,33 @@ func handleIPCRequest(ctrl *settings.Controller, app *walk.Application, req ipc.
 
 func handleStart(ctrl *settings.Controller, args []string) ipc.Response {
 	if len(args) == 0 {
-		return ipc.Response{Success: false, Message: "start requires an argument: a duration (e.g. 30m, 1h30m), 'indefinite', or 'preset <n>'."}
+		return ipc.Response{Success: false, Message: "start requires an argument: a duration (e.g. 30m, 1h30m), 'indefinite', 'preset <n>', or 'until <duration>'."}
 	}
 
 	switch strings.ToLower(args[0]) {
 	case "indefinite", "indef", "0":
 		ctrl.SetIndefinite()
 		return ipc.Response{Success: true, Message: "Indefinite keep-on activated.", Status: statusPayload(ctrl)}
+
+	case "until":
+		// mugcup-cli's "start until <time>" resolves the target date/time to a
+		// duration itself (see parseUntilTarget there) and sends it here — the
+		// same duration SetCustomDuration/the default case below would take,
+		// just routed to SetSchedule so Mode ends up ModeSchedule instead of
+		// ModeTimer (this is the IPC-reachable equivalent of the Custom
+		// window's "until a date & time" tab, StartScheduleSeconds in
+		// wailsapp.go, which only the Wails frontend could reach before).
+		if len(args) < 2 {
+			return ipc.Response{Success: false, Message: "until requires a duration (e.g. start until 2h15m)"}
+		}
+		d, err := settings.ParseDuration(args[1])
+		if err != nil {
+			return ipc.Response{Success: false, Message: fmt.Sprintf("invalid duration format: %v", err)}
+		}
+		if err := ctrl.SetSchedule(d); err != nil {
+			return ipc.Response{Success: false, Message: err.Error()}
+		}
+		return ipc.Response{Success: true, Message: fmt.Sprintf("Timer started (%s)", ctrl.State().RemainingLabel()), Status: statusPayload(ctrl)}
 
 	case "preset":
 		if len(args) < 2 {

@@ -25,6 +25,7 @@ type Request struct {
 	AutoUpdateCheck *bool    `json:"autoUpdateCheck,omitempty"`
 	AutoUpdateApply *bool    `json:"autoUpdateApply,omitempty"`
 	Language        *string  `json:"language,omitempty"`
+	TrayClickAction *string  `json:"trayClickAction,omitempty"`
 	ConfigJSON      string   `json:"configJson,omitempty"`
 }
 

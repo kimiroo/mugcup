@@ -23,6 +23,7 @@ type options struct {
 	autoUpdateCheck *bool
 	autoUpdateApply *bool
 	language        *string // "auto", "en", or "ko" — see mugcup/i18n on the GUI side
+	trayClickAction *string // "cycle", "indefinite", or "menu" — see settings.TrayClickAction
 	yes             bool    // -y/--yes: skip the "update" command's [y/N] confirmation
 	noUpdate        bool    // --no-update: only consumed by "launch" (see runLaunch)
 	output          string  // "text" (default) or "json"
@@ -31,7 +32,7 @@ type options struct {
 // hasSetting reports whether any settings-only option was given, for
 // validating the standalone "set" command has something to do.
 func (o options) hasSetting() bool {
-	return o.displayOn != nil || o.autoStart != nil || o.autoUpdateCheck != nil || o.autoUpdateApply != nil || o.language != nil
+	return o.displayOn != nil || o.autoStart != nil || o.autoUpdateCheck != nil || o.autoUpdateApply != nil || o.language != nil || o.trayClickAction != nil
 }
 
 // asRequest carries this options' settings-only fields into a Request,
@@ -43,6 +44,7 @@ func (o options) asRequest() Request {
 		AutoUpdateCheck: o.autoUpdateCheck,
 		AutoUpdateApply: o.autoUpdateApply,
 		Language:        o.language,
+		TrayClickAction: o.trayClickAction,
 	}
 }
 
@@ -58,10 +60,13 @@ Commands:
   start <time>             Keep on for the given duration (e.g. 30m, 1h, 2h15m). Required — no default
   start indefinite         Keep on indefinitely
   start preset <n>         Start the n-th preset from the configured list (0-based)
+  start until <time>       Keep on until the given time today (e.g. 18:00), a specific date & time
+                            (e.g. 2026-01-02 18:00, quoted if it has a space), or an RFC3339
+                            timestamp (e.g. 2026-01-02T18:00:00+09:00). Must be in the future
   stop                     Turn off the timer and keep-on
   set                      Change settings that aren't tied to a running timer (see Options below).
                             Requires at least one of -d, --auto-start, --auto-update-check,
-                            --auto-update-apply, --language
+                            --auto-update-apply, --language, --tray-click-action
   config                   Show the current config
   settings                 Open the settings window
   status                   Show the current status
@@ -82,6 +87,8 @@ Options:
                                       auto-update-check is also on)
   --language <auto|en|ko>          Set the GUI's display language (tray menu, popup window, dialogs).
                                     Doesn't affect mugcup-cli's own output, which stays English-only
+  --tray-click-action <cycle|indefinite|menu>   Set what a tray left-click does: cycle through
+                                    presets, toggle indefinite keep-on, or just open the tray menu
   -y, --yes                       Skip the "update" command's [y/N] confirmation
   --no-update                     With "launch": start mugcup without its startup auto-update check
   -o, --output <text|json>        Output format. start/stop/set/status/config/export/import
@@ -92,9 +99,12 @@ Examples:
   mugcup-cli launch --no-update
   mugcup-cli start 1h30m
   mugcup-cli start preset 0
+  mugcup-cli start until 18:00
+  mugcup-cli start until "2026-01-02 18:00"
   mugcup-cli start indefinite -d true
   mugcup-cli set --auto-start true --auto-update-apply false
   mugcup-cli set --language ko
+  mugcup-cli set --tray-click-action cycle
   mugcup-cli status -o json
   mugcup-cli export config.json
   mugcup-cli update
@@ -107,8 +117,12 @@ Examples:
 // mugcup/i18n ships catalogs for.
 var supportedLanguages = []string{"auto", "en", "ko"}
 
-func isSupportedLanguage(v string) bool {
-	for _, s := range supportedLanguages {
+// supportedTrayClickActions are the values --tray-click-action accepts —
+// see settings.TrayClickAction on the GUI side.
+var supportedTrayClickActions = []string{"cycle", "indefinite", "menu"}
+
+func contains(list []string, v string) bool {
+	for _, s := range list {
 		if v == s {
 			return true
 		}
@@ -116,21 +130,22 @@ func isSupportedLanguage(v string) bool {
 	return false
 }
 
-// failUnsupportedLanguage rejects an unrecognized --language value and exits,
-// listing the supported codes — as JSON on stdout (opts.output == "json", to
-// match printResult's failure shape) or plain text on stderr otherwise. opts
-// is passed by value with output already resolved by outputFormat below, so
-// this works regardless of where --language falls relative to -o/--output.
-func failUnsupportedLanguage(opts options, got string) {
+// failUnsupportedValue rejects an unrecognized enum-flag value (--language,
+// --tray-click-action, ...) and exits, listing what's actually supported —
+// as JSON on stdout under jsonListKey (opts.output == "json", to match
+// printResult's failure shape) or plain text on stderr otherwise. opts is
+// passed by value with output already resolved by outputFormat below, so
+// this works regardless of where the flag falls relative to -o/--output.
+func failUnsupportedValue(opts options, field, jsonListKey string, supported []string, got string) {
 	if opts.output == "json" {
 		printJSON(map[string]any{
-			"success":            false,
-			"message":            fmt.Sprintf("unsupported language: %s", got),
-			"supportedLanguages": supportedLanguages,
+			"success":   false,
+			"message":   fmt.Sprintf("unsupported %s: %s", field, got),
+			jsonListKey: supported,
 		})
 		os.Exit(1)
 	}
-	fail("unsupported language: %s\nSupported languages: %s", got, strings.Join(supportedLanguages, ", "))
+	fail("unsupported %s: %s\nSupported values: %s", field, got, strings.Join(supported, ", "))
 }
 
 // outputFormat pre-scans args for -o/--output so its value is known even
@@ -201,10 +216,20 @@ func parseOptions(args []string) (options, []string, error) {
 			}
 			i++
 			v := strings.ToLower(args[i])
-			if !isSupportedLanguage(v) {
-				failUnsupportedLanguage(opts, args[i])
+			if !contains(supportedLanguages, v) {
+				failUnsupportedValue(opts, "language", "supportedLanguages", supportedLanguages, args[i])
 			}
 			opts.language = &v
+		case "--tray-click-action":
+			if i+1 >= len(args) {
+				return opts, nil, fmt.Errorf("%s requires a cycle/indefinite/menu value", a)
+			}
+			i++
+			v := strings.ToLower(args[i])
+			if !contains(supportedTrayClickActions, v) {
+				failUnsupportedValue(opts, "tray click action", "supportedTrayClickActions", supportedTrayClickActions, args[i])
+			}
+			opts.trayClickAction = &v
 		case "-o", "--output":
 			if i+1 >= len(args) {
 				return opts, nil, fmt.Errorf("%s requires a text/json value", a)
@@ -322,11 +347,29 @@ func main() {
 
 	case "start":
 		if len(positional) == 0 {
-			fail("start requires an argument: a duration (e.g. 30m, 1h30m), 'indefinite', or 'preset <n>'.\nRun 'mugcup-cli help' for usage.")
+			fail("start requires an argument: a duration (e.g. 30m, 1h30m), 'indefinite', 'preset <n>', or 'until <time>'.\nRun 'mugcup-cli help' for usage.")
+		}
+		startArgs := positional
+		if strings.ToLower(positional[0]) == "until" {
+			if len(positional) < 2 {
+				fail("start until requires a target time (e.g. 18:00, 2026-01-02 18:00).\nRun 'mugcup-cli help' for usage.")
+			}
+			target := strings.Join(positional[1:], " ")
+			d, err := parseUntilTarget(target)
+			if err != nil {
+				fail("%s", err.Error())
+			}
+			if d <= 0 {
+				fail("the target must be in the future: %s", target)
+			}
+			// mugcup.exe resolves "until" the same way (settings.ParseDuration on
+			// args[1]) so it never needs to know what "18:00" means — only how
+			// long from now, which the CLI has already worked out here.
+			startArgs = []string{"until", d.String()}
 		}
 		req := opts.asRequest()
 		req.Command = "start"
-		req.Args = positional
+		req.Args = startArgs
 		resp, ok := sendToRunningInstance(req)
 		if !ok {
 			fail(notRunningMsg)
@@ -344,7 +387,7 @@ func main() {
 
 	case "set":
 		if !opts.hasSetting() {
-			fail("set requires at least one of: -d/--display-on, --auto-start, --auto-update-check, --auto-update-apply, --language.\nRun 'mugcup-cli help' for usage.")
+			fail("set requires at least one of: -d/--display-on, --auto-start, --auto-update-check, --auto-update-apply, --language, --tray-click-action.\nRun 'mugcup-cli help' for usage.")
 		}
 		req := opts.asRequest()
 		req.Command = "set"

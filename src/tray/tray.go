@@ -58,7 +58,7 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 		for _, p := range subItems {
 			if s.Active && s.PresetActive && p.seconds == s.PresetSeconds {
 				p.item.Check()
-				p.item.SetTooltip(p.label + " - " + s.RemainingLabel())
+				p.item.SetTooltip(p.label + " - " + remainingLabel(s))
 				anyChecked = true
 			} else {
 				p.item.Uncheck()
@@ -79,7 +79,7 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 		}
 		subItems = nil
 		for _, sec := range timerList {
-			label := settings.FormatDurationSec(sec)
+			label := formatPresetLabel(sec)
 			sub := mPresets.AddSubMenuItemCheckbox(label, fmt.Sprintf(i18n.T("tray.preset.start_tooltip"), label), false)
 			subItems = append(subItems, presetItem{item: sub, seconds: sec, label: label})
 			go func(s *systray.MenuItem, durationSec int) {
@@ -154,7 +154,8 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 		}
 		updateTapHandler(c.TrayClickAction)
 		relabel()
-		rebuildPresets(c.TimerList)
+		rebuildPresets(c.TimerList) // also refreshes preset tooltips (updatePresetChecks)
+		updateTooltip(ctrl.State()) // a language change alone wouldn't otherwise reach this until the next state change or the 30s ticker
 	})
 
 	ctrl.OnStateChange(func(s settings.State) {
@@ -216,7 +217,40 @@ func onReady(ctrl *settings.Controller, cb Callbacks) {
 }
 
 func updateTooltip(s settings.State) {
-	systray.SetTooltip("mugcup - " + s.RemainingLabel())
+	systray.SetTooltip("mugcup - " + remainingLabel(s))
+}
+
+// formatPresetLabel renders a preset's duration for tray display, using the
+// active locale for "Indefinite" — settings.FormatDurationSec can't do that
+// itself since settings deliberately doesn't import i18n (see its doc
+// comment); mugcup-cli's own English-only output still calls
+// FormatDurationSec directly.
+func formatPresetLabel(sec int) string {
+	if sec <= 0 {
+		return i18n.T("ui.common.indefinite")
+	}
+	return settings.FormatDurationSec(sec)
+}
+
+// remainingLabel is settings.State.RemainingLabel(), localized the same way
+// as formatPresetLabel above, for the tray's own tooltip/menu text.
+func remainingLabel(s settings.State) string {
+	if !s.Active {
+		return i18n.T("ui.common.off")
+	}
+	if s.Indefinite {
+		return i18n.T("ui.common.indefinite")
+	}
+	remaining := time.Until(s.ExpiresAt)
+	if remaining < 0 {
+		remaining = 0
+	}
+	h := int(remaining.Hours())
+	m := int(remaining.Minutes()) % 60
+	if h > 0 {
+		return fmt.Sprintf(i18n.T("ui.common.time_left_hm"), h, m)
+	}
+	return fmt.Sprintf(i18n.T("ui.common.time_left_m"), m)
 }
 
 func updateTrayIcon(s settings.State) {
