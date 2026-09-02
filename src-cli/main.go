@@ -87,8 +87,9 @@ Options:
                                       auto-update-check is also on)
   --language <auto|en|ko>          Set the GUI's display language (tray menu, popup window, dialogs).
                                     Doesn't affect mugcup-cli's own output, which stays English-only
-  --tray-click-action <cycle|indefinite|menu>   Set what a tray left-click does: cycle through
-                                    presets, toggle indefinite keep-on, or just open the tray menu
+  --tray-click-action <cycle|indefinite|menu>
+                                   What a tray left-click does: cycle through presets, toggle
+                                   indefinite keep-on, or just open the tray menu
   -y, --yes                       Skip the "update" command's [y/N] confirmation
   --no-update                     With "launch": start mugcup without its startup auto-update check
   -o, --output <text|json>        Output format. start/stop/set/status/config/export/import
@@ -130,12 +131,39 @@ func contains(list []string, v string) bool {
 	return false
 }
 
+// parseBoolFlag consumes name's required true/false value at args[*i+1],
+// advancing *i past it.
+func parseBoolFlag(args []string, i *int, name string) (*bool, error) {
+	if *i+1 >= len(args) {
+		return nil, fmt.Errorf("%s requires a true/false value", name)
+	}
+	*i++
+	v, err := parseBool(args[*i])
+	if err != nil {
+		return nil, fmt.Errorf("invalid value for %s: %s", name, args[*i])
+	}
+	return &v, nil
+}
+
+// parseEnumFlag consumes name's required value at args[*i+1] (lowercased),
+// advancing *i past it, and exits via failUnsupportedValue if it isn't one
+// of supported.
+func parseEnumFlag(opts options, args []string, i *int, name string, supported []string, field, jsonListKey string) (*string, error) {
+	if *i+1 >= len(args) {
+		return nil, fmt.Errorf("%s requires a value (%s)", name, strings.Join(supported, "/"))
+	}
+	*i++
+	v := strings.ToLower(args[*i])
+	if !contains(supported, v) {
+		failUnsupportedValue(opts, field, jsonListKey, supported, args[*i])
+	}
+	return &v, nil
+}
+
 // failUnsupportedValue rejects an unrecognized enum-flag value (--language,
-// --tray-click-action, ...) and exits, listing what's actually supported —
-// as JSON on stdout under jsonListKey (opts.output == "json", to match
-// printResult's failure shape) or plain text on stderr otherwise. opts is
-// passed by value with output already resolved by outputFormat below, so
-// this works regardless of where the flag falls relative to -o/--output.
+// --tray-click-action, ...) and exits with the supported list — as JSON
+// under jsonListKey, or plain text. opts.output must already be resolved
+// (see outputFormat) since this can fire before -o itself is parsed.
 func failUnsupportedValue(opts options, field, jsonListKey string, supported []string, got string) {
 	if opts.output == "json" {
 		printJSON(map[string]any{
@@ -148,10 +176,9 @@ func failUnsupportedValue(opts options, field, jsonListKey string, supported []s
 	fail("unsupported %s: %s\nSupported values: %s", field, got, strings.Join(supported, ", "))
 }
 
-// outputFormat pre-scans args for -o/--output so its value is known even
-// when --language (which validates and can exit immediately) appears before
-// it on the command line. Invalid or missing values fall back to "text" —
-// parseOptions' own loop below still catches and reports those properly.
+// outputFormat pre-scans args for -o/--output, so an enum flag earlier in
+// the command line can still fail as JSON. Falls back to "text"; the main
+// parse loop below still validates -o itself.
 func outputFormat(args []string) string {
 	for i := 0; i < len(args)-1; i++ {
 		if args[i] == "-o" || args[i] == "--output" {
@@ -171,65 +198,41 @@ func parseOptions(args []string) (options, []string, error) {
 		a := args[i]
 		switch a {
 		case "-d", "--display-on":
-			if i+1 >= len(args) {
-				return opts, nil, fmt.Errorf("%s requires a true/false value", a)
-			}
-			i++
-			v, err := parseBool(args[i])
+			v, err := parseBoolFlag(args, &i, a)
 			if err != nil {
-				return opts, nil, fmt.Errorf("invalid value for %s: %s", a, args[i])
+				return opts, nil, err
 			}
-			opts.displayOn = &v
+			opts.displayOn = v
 		case "--auto-start":
-			if i+1 >= len(args) {
-				return opts, nil, fmt.Errorf("%s requires a true/false value", a)
-			}
-			i++
-			v, err := parseBool(args[i])
+			v, err := parseBoolFlag(args, &i, a)
 			if err != nil {
-				return opts, nil, fmt.Errorf("invalid value for %s: %s", a, args[i])
+				return opts, nil, err
 			}
-			opts.autoStart = &v
+			opts.autoStart = v
 		case "--auto-update-check":
-			if i+1 >= len(args) {
-				return opts, nil, fmt.Errorf("%s requires a true/false value", a)
-			}
-			i++
-			v, err := parseBool(args[i])
+			v, err := parseBoolFlag(args, &i, a)
 			if err != nil {
-				return opts, nil, fmt.Errorf("invalid value for %s: %s", a, args[i])
+				return opts, nil, err
 			}
-			opts.autoUpdateCheck = &v
+			opts.autoUpdateCheck = v
 		case "--auto-update-apply":
-			if i+1 >= len(args) {
-				return opts, nil, fmt.Errorf("%s requires a true/false value", a)
-			}
-			i++
-			v, err := parseBool(args[i])
+			v, err := parseBoolFlag(args, &i, a)
 			if err != nil {
-				return opts, nil, fmt.Errorf("invalid value for %s: %s", a, args[i])
+				return opts, nil, err
 			}
-			opts.autoUpdateApply = &v
+			opts.autoUpdateApply = v
 		case "--language":
-			if i+1 >= len(args) {
-				return opts, nil, fmt.Errorf("%s requires an auto/en/ko value", a)
+			v, err := parseEnumFlag(opts, args, &i, a, supportedLanguages, "language", "supportedLanguages")
+			if err != nil {
+				return opts, nil, err
 			}
-			i++
-			v := strings.ToLower(args[i])
-			if !contains(supportedLanguages, v) {
-				failUnsupportedValue(opts, "language", "supportedLanguages", supportedLanguages, args[i])
-			}
-			opts.language = &v
+			opts.language = v
 		case "--tray-click-action":
-			if i+1 >= len(args) {
-				return opts, nil, fmt.Errorf("%s requires a cycle/indefinite/menu value", a)
+			v, err := parseEnumFlag(opts, args, &i, a, supportedTrayClickActions, "tray click action", "supportedTrayClickActions")
+			if err != nil {
+				return opts, nil, err
 			}
-			i++
-			v := strings.ToLower(args[i])
-			if !contains(supportedTrayClickActions, v) {
-				failUnsupportedValue(opts, "tray click action", "supportedTrayClickActions", supportedTrayClickActions, args[i])
-			}
-			opts.trayClickAction = &v
+			opts.trayClickAction = v
 		case "-o", "--output":
 			if i+1 >= len(args) {
 				return opts, nil, fmt.Errorf("%s requires a text/json value", a)
@@ -346,74 +349,22 @@ func main() {
 		printResult(opts, runExit(opts))
 
 	case "start":
-		if len(positional) == 0 {
-			fail("start requires an argument: a duration (e.g. 30m, 1h30m), 'indefinite', 'preset <n>', or 'until <time>'.\nRun 'mugcup-cli help' for usage.")
-		}
-		startArgs := positional
-		if strings.ToLower(positional[0]) == "until" {
-			if len(positional) < 2 {
-				fail("start until requires a target time (e.g. 18:00, 2026-01-02 18:00).\nRun 'mugcup-cli help' for usage.")
-			}
-			target := strings.Join(positional[1:], " ")
-			d, err := parseUntilTarget(target)
-			if err != nil {
-				fail("%s", err.Error())
-			}
-			if d <= 0 {
-				fail("the target must be in the future: %s", target)
-			}
-			// mugcup.exe resolves "until" the same way (settings.ParseDuration on
-			// args[1]) so it never needs to know what "18:00" means — only how
-			// long from now, which the CLI has already worked out here.
-			startArgs = []string{"until", d.String()}
-		}
-		req := opts.asRequest()
-		req.Command = "start"
-		req.Args = startArgs
-		resp, ok := sendToRunningInstance(req)
-		if !ok {
-			fail(notRunningMsg)
-		}
-		printResult(opts, resp)
+		runStart(opts, positional)
 
 	case "stop":
-		req := opts.asRequest()
-		req.Command = "stop"
-		resp, ok := sendToRunningInstance(req)
-		if !ok {
-			fail(notRunningMsg)
-		}
-		printResult(opts, resp)
+		runSimple(opts, "stop")
 
 	case "set":
 		if !opts.hasSetting() {
 			fail("set requires at least one of: -d/--display-on, --auto-start, --auto-update-check, --auto-update-apply, --language, --tray-click-action.\nRun 'mugcup-cli help' for usage.")
 		}
-		req := opts.asRequest()
-		req.Command = "set"
-		resp, ok := sendToRunningInstance(req)
-		if !ok {
-			fail(notRunningMsg)
-		}
-		printResult(opts, resp)
+		runSimple(opts, "set")
 
 	case "status":
-		req := opts.asRequest()
-		req.Command = "status"
-		resp, ok := sendToRunningInstance(req)
-		if !ok {
-			fail(notRunningMsg)
-		}
-		printResult(opts, resp)
+		runSimple(opts, "status")
 
 	case "config":
-		req := opts.asRequest()
-		req.Command = "config"
-		resp, ok := sendToRunningInstance(req)
-		if !ok {
-			fail(notRunningMsg)
-		}
-		printResult(opts, resp)
+		runSimple(opts, "config")
 
 	case "export":
 		runExport(opts, positional)
@@ -425,17 +376,55 @@ func main() {
 		runUpdate(opts)
 
 	case "settings":
-		req := opts.asRequest()
-		req.Command = "settings"
-		resp, ok := sendToRunningInstance(req)
-		if !ok {
-			fail(notRunningMsg)
-		}
-		printResult(opts, resp)
+		runSimple(opts, "settings")
 
 	default:
 		fail("unknown command: %s\nRun 'mugcup-cli help' for usage.", args[0])
 	}
+}
+
+// runSimple sends command (plus opts' settings-only fields) to the running
+// instance and prints the result — the shared shape behind
+// stop/set/status/config/settings.
+func runSimple(opts options, command string) {
+	req := opts.asRequest()
+	req.Command = command
+	resp, ok := sendToRunningInstance(req)
+	if !ok {
+		fail(notRunningMsg)
+	}
+	printResult(opts, resp)
+}
+
+func runStart(opts options, positional []string) {
+	if len(positional) == 0 {
+		fail("start requires an argument: a duration (e.g. 30m, 1h30m), 'indefinite', 'preset <n>', or 'until <time>'.\nRun 'mugcup-cli help' for usage.")
+	}
+	args := positional
+	if strings.ToLower(positional[0]) == "until" {
+		if len(positional) < 2 {
+			fail("start until requires a target time (e.g. 18:00, 2026-01-02 18:00).\nRun 'mugcup-cli help' for usage.")
+		}
+		target := strings.Join(positional[1:], " ")
+		d, err := parseUntilTarget(target)
+		if err != nil {
+			fail("%s", err.Error())
+		}
+		if d <= 0 {
+			fail("the target must be in the future: %s", target)
+		}
+		// mugcup.exe just wants a duration (settings.ParseDuration on args[1]);
+		// it never needs to know what "18:00" means.
+		args = []string{"until", d.String()}
+	}
+	req := opts.asRequest()
+	req.Command = "start"
+	req.Args = args
+	resp, ok := sendToRunningInstance(req)
+	if !ok {
+		fail(notRunningMsg)
+	}
+	printResult(opts, resp)
 }
 
 func runExport(opts options, positional []string) {

@@ -361,13 +361,12 @@ func handleStart(ctrl *settings.Controller, args []string) ipc.Response {
 		return ipc.Response{Success: true, Message: "Indefinite keep-on activated.", Status: statusPayload(ctrl)}
 
 	case "until":
-		// mugcup-cli's "start until <time>" resolves the target date/time to a
-		// duration itself (see parseUntilTarget there) and sends it here — the
-		// same duration SetCustomDuration/the default case below would take,
-		// just routed to SetSchedule so Mode ends up ModeSchedule instead of
-		// ModeTimer (this is the IPC-reachable equivalent of the Custom
-		// window's "until a date & time" tab, StartScheduleSeconds in
-		// wailsapp.go, which only the Wails frontend could reach before).
+		// mugcup-cli resolves "start until <time>" to a duration itself (see
+		// parseUntilTarget there) and sends it here — same as the default case
+		// below, just via SetSchedule instead of SetCustomDuration so Mode ends
+		// up ModeSchedule. IPC-reachable equivalent of the Custom window's
+		// "until a date & time" tab, which only StartScheduleSeconds (Wails
+		// binding) could reach before.
 		if len(args) < 2 {
 			return ipc.Response{Success: false, Message: "until requires a duration (e.g. start until 2h15m)"}
 		}

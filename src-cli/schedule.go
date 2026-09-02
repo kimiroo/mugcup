@@ -6,17 +6,13 @@ import (
 	"time"
 )
 
-// untilDateTimeLayouts are the full date+time forms "start until <target>"
-// accepts, checked before untilTimeLayouts below since a full timestamp
-// would otherwise misparse as a bare time-of-day. The RFC3339 forms carry
-// their own timezone offset (e.g. "+09:00" or "Z"), so ParseInLocation's
-// location argument only matters for the rest, which assume the CLI's own
-// machine-local timezone; both "T" and a plain space are accepted as the
-// separator there since a shell-unquoted "until 2026-01-02 18:00" arrives as
-// two positional args that runStart rejoins with a single space, and typing
-// a bare space is easier than remembering ISO 8601 wants a "T".
+// untilDateTimeLayouts are the accepted full date+time forms, checked before
+// untilTimeLayouts below so a full timestamp doesn't misparse as a bare
+// time. RFC3339 carries its own timezone offset; the rest assume local
+// time and take "T" or a plain space as the separator (an unquoted "until
+// 2026-01-02 18:00" arrives as two args and gets rejoined with a space).
 var untilDateTimeLayouts = []string{
-	time.RFC3339,             // 2026-01-02T18:00:00+09:00 (or ...Z) — e.g. what `date -Iseconds` prints
+	time.RFC3339,             // 2026-01-02T18:00:00+09:00 (or ...Z) — e.g. `date -Iseconds`
 	"2006-01-02T15:04Z07:00", // same, without seconds
 	"2006-01-02T15:04:05",
 	"2006-01-02T15:04",
@@ -24,23 +20,19 @@ var untilDateTimeLayouts = []string{
 	"2006-01-02 15:04",
 }
 
-// untilTimeLayouts are the bare time-of-day forms — not ISO 8601 (which has
-// no "just a time, today" notion), but kept deliberately as the CLI
-// equivalent of the GUI Custom view's "without date" toggle: the common
-// case of "keep on until 18:00" shouldn't need a date typed out.
+// untilTimeLayouts are bare time-of-day forms (today) — not ISO 8601, but
+// the CLI equivalent of the GUI Custom view's "without date" toggle.
 var untilTimeLayouts = []string{
 	"15:04:05",
 	"15:04",
 }
 
-// parseUntilTarget resolves "start until <target>" — target being a bare
-// time-of-day (meaning today), a full date & time, or an RFC3339 timestamp —
-// to how long from now that target is, mirroring the GUI Custom view's
-// "until a date & time" tab (see startUntil/StartScheduleSeconds in
-// app.js), just resolved here instead of in JS so the CLI needs no round
-// trip to ask mugcup.exe what time it thinks it is. The result can be <= 0
-// (target already passed); callers reject that themselves, same as the GUI
-// does.
+// parseUntilTarget resolves "start until <target>" to how long from now that
+// target is — target being a bare time-of-day (today), a date & time, or an
+// RFC3339 timestamp. Mirrors the GUI Custom view's "until a date & time" tab
+// (startUntil/StartScheduleSeconds in app.js), just resolved CLI-side so
+// mugcup.exe doesn't need to be asked what time it is. May return <= 0 for a
+// target already in the past; callers reject that themselves.
 func parseUntilTarget(raw string) (time.Duration, error) {
 	s := strings.TrimSpace(raw)
 	now := time.Now()

@@ -19,8 +19,8 @@ const (
 	esDisplayRequired = 0x00000002
 )
 
-// Apply는 현재 상태를 실제 OS에 반영한다.
-// active=false면 절전 방지를 해제(ES_CONTINUOUS만 단독 호출)한다.
+// Apply reflects the given state to the OS. active=false clears the
+// sleep-prevention flags (a lone ES_CONTINUOUS call).
 func Apply(active, keepDisplayOn bool) error {
 	var flags uintptr = esContinuous
 	if active {

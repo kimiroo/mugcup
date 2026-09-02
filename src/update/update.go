@@ -51,10 +51,9 @@ func CleanOldExecutables() {
 				continue
 			}
 
-			// Retry up to 10 times (total 1 second) until the old process fully releases the file handle
-			for i := 0; i < 10; i++ {
+			for i := 0; i < 10; i++ { // 1s total
 				if err := os.Remove(path); err == nil {
-					break // Successfully removed
+					break
 				}
 				time.Sleep(100 * time.Millisecond)
 			}

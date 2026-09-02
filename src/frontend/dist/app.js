@@ -261,21 +261,26 @@
     saveConfig();
   }
 
-  // Parses "1h30m", "45m", "2h", "1h 2m 3s", or a bare number of minutes
-  // (e.g. "90" — kept for backward compatibility with the old plain-minutes
-  // field) into whole seconds. Returns null if nothing recognizable was
-  // found; doesn't require every unit, any subset works.
-  function parsePresetDuration(text) {
-    text = text.trim();
-    if (!text) return null;
-    if (/^\d+$/.test(text)) return parseInt(text, 10) * 60;
-    const match = text.match(/^(\d+h)?\s*(\d+m)?\s*(\d+s)?$/i);
+  // Parses "1h30m", "45m", "2h", or "1h 2m 3s" into whole seconds — any
+  // subset of units works. Anchored, so garbage text doesn't just match a
+  // trailing empty prefix. Returns null if nothing recognizable was found.
+  function parseDurationText(text) {
+    const match = text.trim().match(/^(\d+h)?\s*(\d+m)?\s*(\d+s)?$/i);
     if (!match || (!match[1] && !match[2] && !match[3])) return null;
     let sec = 0;
     if (match[1]) sec += parseInt(match[1], 10) * 3600;
     if (match[2]) sec += parseInt(match[2], 10) * 60;
     if (match[3]) sec += parseInt(match[3], 10);
     return sec;
+  }
+
+  // Same as parseDurationText, plus a bare number of minutes (e.g. "90") for
+  // backward compatibility with the old plain-minutes preset field.
+  function parsePresetDuration(text) {
+    text = text.trim();
+    if (!text) return null;
+    if (/^\d+$/.test(text)) return parseInt(text, 10) * 60;
+    return parseDurationText(text);
   }
 
   function addPreset() {
@@ -336,14 +341,8 @@
       showError(t("ui.error.enter_duration"));
       return;
     }
-    const match = text.match(/(\d+h)?\s*(\d+m)?\s*(\d+s)?/i);
-    let sec = 0;
-    if (match) {
-      if (match[1]) sec += parseInt(match[1], 10) * 3600;
-      if (match[2]) sec += parseInt(match[2], 10) * 60;
-      if (match[3]) sec += parseInt(match[3], 10);
-    }
-    if (sec <= 0) {
+    const sec = parseDurationText(text);
+    if (!sec || sec <= 0) {
       showError(t("ui.error.unrecognized_duration"));
       return;
     }
