@@ -180,3 +180,41 @@ func TestParseConfigJSON(t *testing.T) {
 		t.Error("a non-numeric timerList element should be rejected")
 	}
 }
+
+// A stale timer callback (armed for a previous state) must not turn off a
+// state started after it.
+func TestStaleTimerDoesNotTurnOffNewState(t *testing.T) {
+	ctrl := NewController(DefaultConfig())
+	if err := ctrl.SetCustomDuration(20 * time.Millisecond); err != nil {
+		t.Fatalf("SetCustomDuration: %v", err)
+	}
+	staleGen := ctrl.gen
+	ctrl.SetIndefinite()
+	ctrl.expire(staleGen) // what a timer that fired mid-transition would do
+	time.Sleep(60 * time.Millisecond)
+	if st := ctrl.State(); !st.Active || !st.Indefinite {
+		t.Errorf("Expected indefinite state to survive the old timer, got %+v", st)
+	}
+	ctrl.TurnOff()
+}
+
+// Resync judges a running timer by its wall-clock ExpiresAt, as after the
+// machine was suspended past it.
+func TestResyncTurnsOffExpiredTimer(t *testing.T) {
+	ctrl := NewController(DefaultConfig())
+	if err := ctrl.SetSchedule(time.Hour); err != nil {
+		t.Fatalf("SetSchedule: %v", err)
+	}
+	ctrl.Resync()
+	if !ctrl.State().Active {
+		t.Fatal("Resync turned off a timer that hasn't expired")
+	}
+
+	ctrl.mu.Lock()
+	ctrl.state.ExpiresAt = time.Now().Add(-time.Minute).Round(0)
+	ctrl.mu.Unlock()
+	ctrl.Resync()
+	if st := ctrl.State(); st.Active || st.Mode != ModeOff {
+		t.Errorf("Expected Resync to turn off an expired timer, got %+v", st)
+	}
+}
