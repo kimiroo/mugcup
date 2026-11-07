@@ -192,11 +192,17 @@ func (s PersistedState) String() string {
 // ---- Controller: owns both config and runtime state ----
 
 type Controller struct {
-	mu           sync.Mutex
-	cfg          Config
-	state        State
-	timerIndex   int // position in TimerList cycle, -1 = outside the cycle (off/custom)
-	timer        *time.Timer
+	mu         sync.Mutex
+	cfg        Config
+	state      State
+	timerIndex int // position in TimerList cycle, -1 = outside the cycle (off/custom)
+	timer      *time.Timer
+	// gen increments on every state transition. A timer's expiry callback
+	// captures the gen it was armed for and does nothing if the state has
+	// moved on since — otherwise a timer that fired just as the user started
+	// something new (already past Stop, waiting on mu) would turn the new
+	// state off immediately.
+	gen          uint64
 	cfgListeners []func(Config)
 	stListeners  []func(State)
 }
@@ -257,12 +263,11 @@ func (c *Controller) UpdateConfig(cfg Config) error {
 	c.mu.Lock()
 	c.cfg = cfg
 	listeners := append([]func(Config){}, c.cfgListeners...)
-	active := c.state.Active
+	// Re-applied under mu, from the current state rather than a snapshot
+	// read earlier, so a concurrent TurnOff can't be overwritten by a stale
+	// "active" here (which used to leave the machine stuck awake while Off).
+	_ = power.Apply(c.state.Active, cfg.KeepDisplayOn)
 	c.mu.Unlock()
-
-	if active {
-		_ = power.Apply(true, cfg.KeepDisplayOn)
-	}
 
 	for _, l := range listeners {
 		l(cfg)
@@ -287,36 +292,38 @@ func (c *Controller) Cycle() {
 		next = -1
 	}
 	c.timerIndex = next
+	var n notification
+	switch {
+	case next == -1:
+		n = c.applyLocked(0, false, ModeOff)
+	case list[next] <= 0:
+		n = c.applyLocked(0, true, ModeIndefinite)
+	default:
+		n = c.applyLocked(time.Duration(list[next])*time.Second, false, ModeTimer)
+	}
 	c.mu.Unlock()
-
-	if next == -1 {
-		c.apply(0, false, ModeOff)
-		return
-	}
-	seconds := list[next]
-	if seconds <= 0 {
-		c.apply(0, true, ModeIndefinite) // indefinite
-	} else {
-		c.apply(time.Duration(seconds)*time.Second, false, ModeTimer)
-	}
+	n.deliver()
 }
 
 func (c *Controller) SetIndefinite() {
 	c.mu.Lock()
 	c.timerIndex = -1
+	n := c.applyLocked(0, true, ModeIndefinite)
 	c.mu.Unlock()
-	c.apply(0, true, ModeIndefinite)
+	n.deliver()
 }
 
 func (c *Controller) ToggleIndefinite() {
 	c.mu.Lock()
-	activeIndefinite := c.state.Active && c.state.Indefinite
-	c.mu.Unlock()
-	if activeIndefinite {
-		c.TurnOff()
+	c.timerIndex = -1
+	var n notification
+	if c.state.Active && c.state.Indefinite {
+		n = c.applyLocked(0, false, ModeOff)
 	} else {
-		c.SetIndefinite()
+		n = c.applyLocked(0, true, ModeIndefinite)
 	}
+	c.mu.Unlock()
+	n.deliver()
 }
 
 // SetPreset: seconds<=0 means indefinite; >0 keeps it on for that duration (Indefinite=false).
@@ -329,13 +336,14 @@ func (c *Controller) SetPreset(seconds int) {
 			break
 		}
 	}
-	c.mu.Unlock()
-
+	var n notification
 	if seconds <= 0 {
-		c.apply(0, true, ModeIndefinite)
+		n = c.applyLocked(0, true, ModeIndefinite)
 	} else {
-		c.apply(time.Duration(seconds)*time.Second, false, ModeTimer)
+		n = c.applyLocked(time.Duration(seconds)*time.Second, false, ModeTimer)
 	}
+	c.mu.Unlock()
+	n.deliver()
 }
 
 // SetCustomDuration starts a one-off timer for exactly d ("for a duration" in
@@ -358,29 +366,103 @@ func (c *Controller) startFor(d time.Duration, mode Mode) error {
 	}
 	c.mu.Lock()
 	c.timerIndex = -1
+	n := c.applyLocked(d, false, mode)
 	c.mu.Unlock()
-	c.apply(d, false, mode)
+	n.deliver()
 	return nil
 }
 
 func (c *Controller) TurnOff() {
 	c.mu.Lock()
 	c.timerIndex = -1
+	n := c.applyLocked(0, false, ModeOff)
 	c.mu.Unlock()
-	c.apply(0, false, ModeOff)
+	n.deliver()
 }
 
-func (c *Controller) apply(d time.Duration, indefinite bool, mode Mode) {
+// expire is the timer callback: it turns off only if the state it was armed
+// for is still current (see Controller.gen).
+func (c *Controller) expire(gen uint64) {
 	c.mu.Lock()
+	if gen != c.gen {
+		c.mu.Unlock()
+		return
+	}
+	c.timerIndex = -1
+	n := c.applyLocked(0, false, ModeOff)
+	c.mu.Unlock()
+	n.deliver()
+}
+
+// Resync re-checks a running timer against the wall clock and re-arms (or
+// fires) it accordingly. Go's timers run on the monotonic clock, which isn't
+// guaranteed to advance while the machine is suspended, so after a
+// sleep/hibernate a timer could otherwise fire long after its ExpiresAt (or,
+// for a Schedule, miss its wall-clock target entirely). main.go calls this on
+// every resume (power.OnResume). It also copes with the wall clock itself
+// having been changed — ExpiresAt is the source of truth.
+func (c *Controller) Resync() {
+	c.mu.Lock()
+	if !c.state.Active || c.state.Indefinite {
+		c.mu.Unlock()
+		return
+	}
+	remaining := time.Until(c.state.ExpiresAt) // no monotonic reading in ExpiresAt → wall clock
+	if remaining <= 0 {
+		logger.Println("timer expired while the system was suspended; turning off")
+		c.timerIndex = -1
+		n := c.applyLocked(0, false, ModeOff)
+		c.mu.Unlock()
+		n.deliver()
+		return
+	}
+	// Still running: re-arm for the real remaining time. The state itself
+	// is unchanged, so gen stays the same and no listeners fire.
+	if c.timer != nil {
+		c.timer.Stop()
+	}
+	gen := c.gen
+	c.timer = time.AfterFunc(remaining, func() { c.expire(gen) })
+	c.mu.Unlock()
+}
+
+// notification is what a state transition still has to do after c.mu is
+// released: persist the new state and notify listeners (which may do slow
+// things like rebuild the tray menu, so they never run under mu).
+type notification struct {
+	persisted PersistedState
+	state     State
+	listeners []func(State)
+}
+
+func (n notification) deliver() {
+	saveState(n.persisted) // store.go
+	for _, l := range n.listeners {
+		l(n.state)
+	}
+}
+
+// applyLocked performs a state transition; c.mu must be held. The OS power
+// state is applied before mu is released, so concurrent transitions reach
+// the OS in the same order they took effect in c.state (power.Apply used to
+// run after unlocking, so two racing transitions could leave the OS awake
+// while state said Off, or vice versa).
+func (c *Controller) applyLocked(d time.Duration, indefinite bool, mode Mode) notification {
 	if c.timer != nil {
 		c.timer.Stop()
 		c.timer = nil
 	}
+	c.gen++
 	active := d > 0 || indefinite
 	var expiresAt time.Time
 	if active && !indefinite {
-		expiresAt = time.Now().Add(d)
-		c.timer = time.AfterFunc(d, func() { c.TurnOff() })
+		// Round(0) strips the monotonic reading, so every later
+		// time.Until(ExpiresAt) — RemainingLabel, Resync, the CLI status —
+		// is judged against the wall clock, which keeps counting while the
+		// machine sleeps.
+		expiresAt = time.Now().Add(d).Round(0)
+		gen := c.gen
+		c.timer = time.AfterFunc(d, func() { c.expire(gen) })
 	}
 	if !active {
 		mode = ModeOff
@@ -399,29 +481,24 @@ func (c *Controller) apply(d time.Duration, indefinite bool, mode Mode) {
 		PresetActive:  presetActive,
 		PresetSeconds: presetSeconds,
 	}
-	state := c.state
-	timerIndex := c.timerIndex
-	listeners := append([]func(State){}, c.stListeners...)
-	cfg := c.cfg
-	c.mu.Unlock()
 
-	_ = power.Apply(active, cfg.KeepDisplayOn)
+	_ = power.Apply(active, c.cfg.KeepDisplayOn)
 
-	saveState(PersistedState{ // store.go
-		Active:     state.Active,
-		Indefinite: state.Indefinite,
-		ExpiresAt:  state.ExpiresAt,
-		Mode:       state.Mode,
-		TimerIndex: timerIndex,
-	})
-
-	for _, l := range listeners {
-		l(state)
+	return notification{
+		persisted: PersistedState{
+			Active:     c.state.Active,
+			Indefinite: c.state.Indefinite,
+			ExpiresAt:  c.state.ExpiresAt,
+			Mode:       c.state.Mode,
+			TimerIndex: c.timerIndex,
+		},
+		state:     c.state,
+		listeners: append([]func(State){}, c.stListeners...),
 	}
 }
 
 // RestoreState loads the timer state a previous run persisted to
-// state.json (see saveState in store.go, called from apply above) and
+// state.json (see saveState in store.go, called via applyLocked above) and
 // resumes it if it's still valid: an indefinite timer resumes as-is, and a
 // running timer resumes with whatever time is left, judged against the
 // wall clock — ExpiresAt is an absolute time, so this doesn't need to know
@@ -438,21 +515,23 @@ func (c *Controller) RestoreState() {
 		return
 	}
 
+	var n notification
 	c.mu.Lock()
-	c.timerIndex = saved.TimerIndex
-	c.mu.Unlock()
-
 	if saved.Indefinite {
-		c.apply(0, true, saved.Mode)
-		return
+		c.timerIndex = saved.TimerIndex
+		n = c.applyLocked(0, true, saved.Mode)
+	} else {
+		remaining := time.Until(saved.ExpiresAt)
+		if remaining <= 0 {
+			c.mu.Unlock()
+			logger.Println("Saved timer had already expired while mugcup was closed; staying Off.")
+			return
+		}
+		c.timerIndex = saved.TimerIndex
+		n = c.applyLocked(remaining, false, saved.Mode)
 	}
-
-	remaining := time.Until(saved.ExpiresAt)
-	if remaining <= 0 {
-		logger.Println("Saved timer had already expired while mugcup was closed; staying Off.")
-		return
-	}
-	c.apply(remaining, false, saved.Mode)
+	c.mu.Unlock()
+	n.deliver()
 }
 
 // ParseDuration parses input like "1h30m", "45m".

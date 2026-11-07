@@ -15,6 +15,7 @@ import (
 	"mugcup/autostart"
 	"mugcup/i18n"
 	"mugcup/ipc"
+	"mugcup/power"
 	"mugcup/settings"
 	"mugcup/tray"
 	"mugcup/update"
@@ -166,6 +167,14 @@ func main() {
 	if err != nil {
 		mainLogger.Fatal("walk.InitApp failed:", err)
 	}
+
+	// After sleep/hibernate, re-check a running timer against the wall clock
+	// (power has already re-asserted the execution state by the time this
+	// runs). On the walk main thread, since it may turn the timer off and
+	// rebuild the tray menu.
+	power.OnResume(func() {
+		app.Synchronize(ctrl.Resync)
+	})
 
 	initWails(ctrl, app)
 
